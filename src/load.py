@@ -71,6 +71,9 @@ def download_files(records: pd.DataFrame, force_download: bool = True):
             if not file_name or not file_link:
                 failed += 1
                 continue
+            if file_name == "empty_file.txt":
+                skipped += 1
+                continue
 
             extension = file_name.split(".")[-1]
             file_path = f"{OUTPUT_DIR}/{extension.lower()}/{file_name}"
@@ -89,12 +92,12 @@ def download_files(records: pd.DataFrame, force_download: bool = True):
     print(f"[load] Downloaded {downloaded}/{total} files ({skipped=}, {failed=})")
 
 
-def load():
+def load(args=None):
     parser = argparse.ArgumentParser(description="Load records")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching records")
     parser.add_argument("--skip-download", action="store_true", help="Skip downloading files")
     parser.add_argument("--force-download", action="store_true", help="Force download files")
-    args = parser.parse_args()
+    args = parser.parse_args(args)
 
     # Get existing records
     existing = get_records()
