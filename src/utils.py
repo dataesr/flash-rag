@@ -3,12 +3,23 @@ import json
 import httpx
 
 
-def save_jsonl(records: list[dict], output_path: str):
-    """Save a list of dicts as a JSONL file."""
+def save_jsonl(data: list[dict] | dict | None, output_path: str):
+    """Save a list of dicts as a JSON or JSONL file."""
+    if not data:
+        print("[save_jsonl] No data to save")
+        return
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        for record in records:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    print(f"Saved {len(records)} records to {output_path}")
+        if isinstance(data, dict):
+            json.dump(data, f, ensure_ascii=False, indent=4)
+            print(f"[save_jsonl] Saved data to {output_path}")
+        elif isinstance(data, list):
+            for record in data:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            print(f"[save_jsonl] Saved {len(data)} records to {output_path}")
+        else:
+            print(f"[save_jsonl] Unsupported type: {type(data)}")
 
 
 def load_jsonl(input_path: str) -> list[dict]:

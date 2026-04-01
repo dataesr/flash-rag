@@ -1,47 +1,54 @@
+import os
 import argparse
 import pandas as pd
-from src.load import get_records
+from src.mistral import mistral_ocr
+from src.utils import save_jsonl
+from src.load import get_records, get_files
 
 
-def get_files(records: pd.DataFrame) -> pd.DataFrame:
-    if not len(records):
-        print("[extract] Records dataframe is empty")
-        return pd.DataFrame()
+def extract_one(file: pd.Series, force_extract: bool = False) -> str:
+    file_name = file["file_name"]
+    file_path = file["file_path"]
+    ocr_path = file["ocr_path"]
 
-    if "files" not in records.columns:
-        print("[extract] No column 'files' found on records dataframe")
-        return pd.DataFrame()
+    if not ocr_path or not file_path:
+        return "failed"
 
-    # Explode df on files column
+    if not force_extract and os.path.exists(ocr_path):
+        return "skipped"
+
     try:
-        exploded = records.explode("files", ignore_index=True)
-        files_data = (
-            pd.json_normalize(exploded["files"], sep="_")
-            .add_prefix("file_")
-            .rename(columns={"file_key": "file_name", "file_links_self": "file_url"})
-            .reset_index(drop=True)
-        )
-        files_data["format"] = files_data["file_name"].apply(lambda x: x.split(".")[-1])
-        resource_types = exploded["metadata"].apply(lambda x: x.get("resource_type") if isinstance(x, dict) else None)
-        types_data = pd.json_normalize(resource_types).rename(columns={"title": "type_title"}).reset_index(drop=True)
-        files = pd.concat([exploded[["id", "modified"]], files_data, types_data], axis=1)
+        data = mistral_ocr(file_path, file_name)
+        save_jsonl(data, ocr_path)
+        return "extracted"
     except Exception as error:
-        print(f"[error] Error while exploding files: {error}")
-        raise error
-
-    print(f"[extract] Found {len(files)} files from {len(records)} records")
-    return files
+        print(f"[error] Failed to extract {file_name}: {error}")
+        print(f"[debug] {ocr_path=}, {file_path=}")
+        return "failed"
 
 
-def extract_pdf(files: pd.DataFrame):
-    pdfs = files[files["format"].isin(["pdf"])]
+def extract_pdf(files: pd.DataFrame, force_extract: bool = False):
+    if not len(files):
+        print("[extract] Found 0 files to extract")
+        return
+
+    pdfs = files[files["file_format"].isin(["pdf"])]
     print(f"[extract] Found {len(pdfs)} pdf from {len(files)} files")
 
-    if len(pdfs):
-        print("[debug] dry run")
-        pass
+    if not len(pdfs):
+        print(f"[extract] Found 0 pdf files from {len(files)} files to extract")
+        return
 
-    print(f"[extract] Extracted {len(pdfs)} pdf files")
+    # Extract pdf files
+    stats = pdfs.apply(extract_one, force_extract=force_extract, axis=1)
+
+    # Count stats
+    stats_counts = stats.value_counts()
+    extracted = stats_counts.get("extracted", 0)
+    skipped = stats_counts.get("skipped", 0)
+    failed = stats_counts.get("failed", 0)
+
+    print(f"[extract] Extracted {extracted}/{len(pdfs)} pdf files ({skipped=}, {failed=})")
 
 
 def extract(args=None):
@@ -50,9 +57,10 @@ def extract(args=None):
     args = parser.parse_args(args)
 
     # Get records
+    print("[warn] Only 'article' publications will be extracted")
     records = get_records()
-    print("[warn] Only publications will be extracted")
-    records = records[records["type"].isin(["publication"])]
+    records = records[records["metadata"].apply(lambda x: x.get("resource_type", {}).get("subtype") == "article")]
+    print(f"[extract] Found {len(records)} 'article' records")
 
     # Get files from records
     files = get_files(records)

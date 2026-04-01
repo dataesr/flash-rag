@@ -5,6 +5,7 @@ from src.utils import fetch_data, download_file
 
 BASE_URL = "https://zenodo.org/api/records?communities=ssm-esr&size=25&page=1"
 OUTPUT_DIR = "./data"
+OCR_DIR = f"{OUTPUT_DIR}/ocr"
 OUTPUT_RECORDS = f"{OUTPUT_DIR}/records.jsonl"
 
 
@@ -53,43 +54,88 @@ def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def download_files(records: pd.DataFrame, force_download: bool = True):
-    downloaded = 0
-    skipped = 0
-    failed = 0
-    total = 0
+def get_files(records: pd.DataFrame) -> pd.DataFrame:
+    if not len(records):
+        print("[extract] Records dataframe is empty")
+        return pd.DataFrame()
+
+    if "files" not in records.columns:
+        print("[extract] No column 'files' found on records dataframe")
+        return pd.DataFrame()
+
+    # Explode df on files column
+    try:
+        exploded = records.explode("files", ignore_index=True)
+        files_data = (
+            pd.json_normalize(exploded["files"], sep="_")
+            .add_prefix("file_")
+            .rename(columns={"file_key": "file_name", "file_links_self": "file_url"})
+            .reset_index(drop=True)
+        )
+        # Build file paths
+        files_data["file_format"] = files_data["file_name"].apply(lambda x: x.split(".")[-1])
+        files_data["file_path"] = OUTPUT_DIR + "/" + files_data["file_format"] + "/" + files_data["file_name"]
+        files_data["ocr_name"] = files_data["file_name"].apply(lambda x: x.split(".")[0]) + ".json"
+        files_data["ocr_path"] = OCR_DIR + "/" + files_data["file_format"] + "/" + files_data["ocr_name"]
+
+        # Get resource types
+        resource_types = exploded["metadata"].apply(lambda x: x.get("resource_type") if isinstance(x, dict) else None)
+        types_data = pd.json_normalize(resource_types).rename(columns={"title": "type_title"}).reset_index(drop=True)
+
+        # Merge files
+        files = pd.concat([exploded[["id", "modified"]], files_data, types_data], axis=1)
+    except Exception as error:
+        print(f"[error] Error while exploding files: {error}")
+        raise error
+
+    print(f"[extract] Found {len(files)} files from {len(records)} records")
+    return files
+
+
+def download_one_file(file: pd.Series, force_download: bool = True) -> str:
+    url = file["file_url"]
+    path = file["file_path"]
+    name = file["file_name"]
+
+    if not url or not path:
+        return "failed"
+    if name == "empty_file.txt":
+        return "skipped"
+    if not force_download and os.path.exists(path):
+        return "skipped"
+    try:
+        download_file(url, path)
+        return "downloaded"
+    except Exception as error:
+        print(f"[error] Failed to download {name}: {error}")
+        print(f"[debug] {url=}, {path=}")
+        return "failed"
+
+
+def download_files(records: pd.DataFrame, force_download: bool = True, formats: list[str] = []):
     total_records = len(records)
 
     print(f"[load] Starting to download files from {total_records} records")
 
-    for index, record in records.iterrows():
-        files = record.get("files", [])
-        for file in files:
-            total += 1
-            file_name = file.get("key")
-            file_link = file.get("links", {}).get("self")
-            if not file_name or not file_link:
-                failed += 1
-                continue
-            if file_name == "empty_file.txt":
-                skipped += 1
-                continue
+    # Get files from records
+    files = get_files(records)
+    if formats:
+        files = files[files["file_format"].isin(formats)]
 
-            extension = file_name.split(".")[-1]
-            file_path = f"{OUTPUT_DIR}/{extension.lower()}/{file_name}"
-            if force_download or not os.path.exists(file_path):
-                try:
-                    download_file(file_link, file_path)
-                    downloaded += 1
-                except Exception as error:
-                    print(f"[error] Failed to download {file_name}: {error}")
-                    failed += 1
-                    continue
-            else:
-                skipped += 1
-                continue
+    if not len(files):
+        print(f"[load] Found 0 files from {len(records)} records to download")
+        return
 
-    print(f"[load] Downloaded {downloaded}/{total} files ({skipped=}, {failed=})")
+    # Download files
+    stats = files.apply(download_one_file, force_download=force_download, axis=1)
+
+    # Count stats
+    stats_counts = stats.value_counts()
+    downloaded = stats_counts.get("downloaded", 0)
+    skipped = stats_counts.get("skipped", 0)
+    failed = stats_counts.get("failed", 0)
+
+    print(f"[load] Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
 
 
 def load(args=None):
