@@ -4,7 +4,7 @@ import httpx
 
 
 def save_jsonl(data: list[dict] | dict | None, output_path: str):
-    """Save a list of dicts as a JSON or JSONL file."""
+    """Save a list of dicts as JSONL or dict as JSON"""
     if not data:
         print("[save_jsonl] No data to save")
         return
@@ -22,10 +22,20 @@ def save_jsonl(data: list[dict] | dict | None, output_path: str):
             print(f"[save_jsonl] Unsupported type: {type(data)}")
 
 
-def load_jsonl(input_path: str) -> list[dict]:
-    """Load a list of dicts from a JSONL file."""
-    with open(input_path, "r", encoding="utf-8") as f:
-        return [json.loads(line) for line in f]
+def load_jsonl(input_path: str) -> list[dict] | dict | None:
+    """Load a list of dicts from a JSONL file or dict from a JSON file."""
+    if not os.path.exists(input_path):
+        print(f"[load_jsonl] File not found: {input_path}")
+        return None
+    if input_path.endswith(".jsonl"):
+        with open(input_path, "r", encoding="utf-8") as f:
+            return [json.loads(line) for line in f]
+    elif input_path.endswith(".json"):
+        with open(input_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    else:
+        print(f"[load_jsonl] Unsupported type: {input_path}")
+        return None
 
 
 def fetch_data(url: str) -> dict:
