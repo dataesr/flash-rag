@@ -44,9 +44,9 @@ def extract_pdf(files: pd.DataFrame, force_extract: bool = False):
 
     # Count stats
     stats_counts = stats.value_counts()
-    extracted = stats_counts.get("extracted", 0)
-    skipped = stats_counts.get("skipped", 0)
-    failed = stats_counts.get("failed", 0)
+    extracted = int(stats_counts.get("extracted", 0))
+    skipped = int(stats_counts.get("skipped", 0))
+    failed = int(stats_counts.get("failed", 0))
 
     print(f"[extract] Extracted {extracted}/{len(pdfs)} pdf files ({skipped=}, {failed=})")
 

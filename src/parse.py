@@ -75,9 +75,15 @@ def parse_markdown(md: str) -> list[dict] | None:
 def parse_one_ocr(file: pd.Series, force_parse: bool = False) -> pd.Series:
     file_name = file["file_name"]
     file_path = file["file_path"]
+    file_format = file["file_format"]
     ocr_path = file["ocr_path"]
 
     results = pd.Series({"parsed": 0, "skipped": 0, "failed": 0, "empty": 0, "total": 0, "file": "failed"})
+
+    if not file_format == "pdf":
+        print(f"[parse] Skipping {file_name} ({file_format=})")
+        results["file"] = "skipped"
+        return results
 
     if not ocr_path:
         print(f"[parse] No ocr_path found for {file_name} ({file_path=})")
@@ -119,8 +125,11 @@ def parse_one_ocr(file: pd.Series, force_parse: bool = False) -> pd.Series:
 
         try:
             sections = parse_markdown(md)
-            page["parsed"] = sections
-            results["parsed"] += 1
+            if sections:
+                page["parsed"] = sections
+                results["parsed"] += 1
+            else:
+                results["empty"] += 1
         except Exception as error:
             print(f"[error] Failed to parse page {page['index']} of {ocr_path}: {error}")
             results["failed"] += 1
@@ -147,11 +156,13 @@ def parse_ocr(files: pd.DataFrame, force_parse: bool = False):
     stats = files.apply(parse_one_ocr, force_parse=force_parse, axis=1)
 
     # Count stats
-    parsed = stats["parsed"].sum()
-    skipped = stats["skipped"].sum()
-    failed = stats["failed"].sum()
-    total = stats["total"].sum()
-    print(f"[parse] Parsed {parsed}/{total} pages ({skipped=}, {failed=})")
+    parsed = int(stats["parsed"].sum())
+    skipped = int(stats["skipped"].sum())
+    failed = int(stats["failed"].sum())
+    empty = int(stats["empty"].sum())
+    total = int(stats["total"].sum())
+    print(f"[parse] Parsed {len(files)} files")
+    print(f"[parse] Parsed {parsed}/{total} pages ({skipped=}, {failed=}, {empty=})")
 
 
 # def get_parsed() -> pd.DataFrame:

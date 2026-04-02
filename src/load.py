@@ -131,9 +131,9 @@ def download_files(records: pd.DataFrame, force_download: bool = True, formats: 
 
     # Count stats
     stats_counts = stats.value_counts()
-    downloaded = stats_counts.get("downloaded", 0)
-    skipped = stats_counts.get("skipped", 0)
-    failed = stats_counts.get("failed", 0)
+    downloaded = int(stats_counts.get("downloaded", 0))
+    skipped = int(stats_counts.get("skipped", 0))
+    failed = int(stats_counts.get("failed", 0))
 
     print(f"[load] Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
 
