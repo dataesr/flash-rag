@@ -56,11 +56,11 @@ def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
 
 def get_files(records: pd.DataFrame) -> pd.DataFrame:
     if not len(records):
-        print("[extract] Records dataframe is empty")
+        print("[load] Records dataframe is empty")
         return pd.DataFrame()
 
     if "files" not in records.columns:
-        print("[extract] No column 'files' found on records dataframe")
+        print("[load] No column 'files' found on records dataframe")
         return pd.DataFrame()
 
     # Explode df on files column
@@ -78,17 +78,22 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
         files_data["ocr_name"] = files_data["file_name"].apply(lambda x: x.split(".")[0]) + ".json"
         files_data["ocr_path"] = OCR_DIR + "/" + files_data["file_format"] + "/" + files_data["ocr_name"]
 
+        # Get metadata
+        metadata = exploded["metadata"]
+        print(metadata.head(2))
+        metadata_data = pd.json_normalize(metadata)[["title", "publication_date", "description"]].reset_index(drop=True)
+
         # Get resource types
-        resource_types = exploded["metadata"].apply(lambda x: x.get("resource_type") if isinstance(x, dict) else None)
+        resource_types = metadata.apply(lambda x: x.get("resource_type") if isinstance(x, dict) else None)
         types_data = pd.json_normalize(resource_types).rename(columns={"title": "type_title"}).reset_index(drop=True)
 
         # Merge files
-        files = pd.concat([exploded[["id", "modified"]], files_data, types_data], axis=1)
+        files = pd.concat([exploded[["id", "created", "modified"]], files_data, metadata_data, types_data], axis=1)
     except Exception as error:
         print(f"[error] Error while exploding files: {error}")
         raise error
 
-    print(f"[extract] Found {len(files)} files from {len(records)} records")
+    print(f"[load] Found {len(files)} files from {len(records)} records")
     return files
 
 

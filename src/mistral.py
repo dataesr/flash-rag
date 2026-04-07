@@ -1,7 +1,11 @@
 import os
 import base64
 import json
+from typing import List, Dict, Any
+import numpy as np
 from mistralai.client import Mistral
+from chromadb.api.types import Embeddings, Documents, EmbeddingFunction, Space
+from chromadb.utils.embedding_functions import register_embedding_function
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,3 +49,51 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
     except Exception as error:
         print(f"[error] Error while processing {document_name}: {error}")
         return None
+
+
+@register_embedding_function
+class MistralEmbeddingFunction(EmbeddingFunction[Documents]):
+    def __init__(self):
+        """
+        Initialize the MistralEmbeddingFunction.
+        """
+        self.model = "mistral-embed"
+        if not client:
+            raise ValueError("Mistral client not initialized")
+        self.client = client
+
+    def __call__(self, input: Documents) -> Embeddings:
+        """
+        Get the embeddings for a list of texts.
+
+        Args:
+            input (Documents): A list of texts to get embeddings for.
+        """
+        if not all(isinstance(item, str) for item in input):
+            raise ValueError("Mistral only supports text documents, not images")
+        output = self.client.embeddings.create(
+            model=self.model,
+            inputs=input,
+        )
+
+        # Extract embeddings from the response
+        return [np.array(data.embedding) for data in output.data]
+
+    @staticmethod
+    def name() -> str:
+        return "mistral"
+
+    def default_space(self) -> Space:
+        return "cosine"
+
+    def supported_spaces(self) -> List[Space]:
+        return ["cosine", "l2", "ip"]
+
+    @staticmethod
+    def build_from_config(config: Dict[str, Any]) -> "EmbeddingFunction[Documents]":
+        return MistralEmbeddingFunction()
+
+    def get_config(self) -> Dict[str, Any]:
+        return {
+            "model": "mistral-embed",
+        }
