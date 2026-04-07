@@ -80,7 +80,6 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
 
         # Get metadata
         metadata = exploded["metadata"]
-        print(metadata.head(2))
         metadata_data = pd.json_normalize(metadata)[["title", "publication_date", "description"]].reset_index(drop=True)
 
         # Get resource types

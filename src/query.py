@@ -17,14 +17,32 @@ def query(args=None):
         n_results=args.k,
     )
 
-    # Print results
-    for i, (doc, metadata, score) in enumerate(
-        zip(results["documents"][0], results["metadatas"][0], results["distances"][0])  # ty:ignore[not-subscriptable]
-    ):
-        print(f"Result {i + 1} (score: {score:.4f}):")
-        print(f"    Document: {doc}")
-        print(f"    Metadata: {metadata}")
-        print()
+    # class QueryResult(TypedDict):
+    #     ids: List[IDs]
+    #     embeddings: Optional[List[Embeddings]]
+    #     documents: Optional[List[List[Document]]]
+    #     uris: Optional[List[List[URI]]]
+    #     metadatas: Optional[List[List[Metadata]]]
+    #     distances: Optional[List[List[float]]]
+    #     included: Include
+
+    ids = results["ids"][0]
+    documents = (results.get("documents") or [[]])[0]
+    metadatas = (results.get("metadatas") or [[]])[0]
+    distances = (results.get("distances") or [[]])[0]
+    sources = []
+    for i in range(len(ids)):
+        sources.append(
+            {
+                "distance": distances[i],
+                "document": documents[i],
+                "metadata": metadatas[i],
+            }
+        )
+
+    answer = "AI answer is not implemented yet..."
+
+    return answer, sources
 
 
 if __name__ == "__main__":

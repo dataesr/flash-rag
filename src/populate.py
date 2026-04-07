@@ -10,18 +10,11 @@ from src.load import OCR_DIR, get_records, get_files
 load_dotenv()
 
 BATCH_SIZE = 50  # Batch size for upserts
+CHUNK_MAX_CHARS = 8000
 
 
-def chunk_document(ocr_path: str) -> list[dict]:
-    """Load an OCR JSON file and produce chunks from its parsed sections.
-
-    Each parsed section becomes one chunk. The document text is built
-    from the section title + its paragraphs. Metadata includes file name,
-    page index, section title, and section level.
-
-    Returns a list of dicts with keys: id, document, metadata.
-    """
-    file_name = os.path.splitext(os.path.basename(ocr_path))[0]
+def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
+    file_name = document_metadata["file_name"]
 
     try:
         with open(ocr_path, "r", encoding="utf-8") as f:
@@ -42,33 +35,44 @@ def chunk_document(ocr_path: str) -> list[dict]:
         if not parsed_sections:
             continue
 
-        for section_idx, section in enumerate(parsed_sections):
+        for section_index, section in enumerate(parsed_sections):
             title = section.get("title", "")
             level = section.get("level", 0)
             paragraphs = section.get("paragraphs", [])
             # tables = section.get("tables", []) #TODO: implement table parsing
 
             if not paragraphs:
-                print(f"[populate] No paragraphs found in section {section_idx} of page {page_index} of {ocr_path}")
+                # print(f"[populate] {file_name}: No paragraphs found in section {section_index} of page {page_index}")
                 continue
 
-            for para_index, para in enumerate(paragraphs):
-                chunk_id = f"{file_name}_p{page_index}_s{section_idx}_p{para_index}"
+            current_doc = ""
+            current_chunks = []
+            for para in paragraphs:
+                next_doc = current_doc + "\n" + para if current_doc else para
+                if len(next_doc) <= CHUNK_MAX_CHARS:
+                    current_doc = next_doc
+                else:
+                    current_chunks.append(current_doc)
+                    current_doc = para
+            current_chunks.append(current_doc)
+
+            if len(current_chunks) > 1:
+                print(f"[populate] {file_name}: Section={section_index}, page={page_index} --> {len(current_chunks)} chunks")
+
+            for chunk_index, chunk in enumerate(current_chunks):
                 chunks.append(
                     {
-                        "id": chunk_id,
-                        "document": para,
+                        "id": f"{file_name}_p{page_index}_s{section_index}_{chunk_index}",
+                        "document": chunk,
                         "metadata": {
-                            "file_name": file_name,
+                            **document_metadata,
                             "page_index": page_index,
-                            "paragraph_index": para_index,
                             "section_title": title[:200],  # Truncate for metadata
                             "section_level": level,
                             "chunk_type": "paragraph",
                         },
                     }
                 )
-
     return chunks
 
 
@@ -92,8 +96,18 @@ def upsert_chunks(chunks: list[dict], collection: Collection, override: bool = F
 
 def upsert_one_document(file: pd.Series, collection: Collection, override: bool = False) -> int:
     path = file["ocr_path"]
+    document_metadata = {
+        "file_id": file["file_id"],
+        "file_name": file["file_name"],
+        "file_format": file["file_format"],
+        "doc_type": file["subtype"],
+        "publication_date": file["publication_date"],
+        "created": str(file["created"]),
+        "modified": str(file["modified"]),
+        "title": file["title"],
+    }
     print(f"[populate] Upserting document {path}")
-    chunks = chunk_document(path)
+    chunks = chunk_document(path, document_metadata)
     if not chunks or not isinstance(chunks, list) or len(chunks) == 0:
         return 0
     try:

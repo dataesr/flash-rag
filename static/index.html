@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flash Notes RAG - AI Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    /* Inline icons fallback to avoid external dependencies for basic indicators */
+    .icon {
+      width: 1.25rem;
+      height: 1.25rem;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>Flash Notes RAG</h1>
+      <p class="subtitle">Intelligent flash notes retrieval and synthesis</p>
+    </header>
+
+    <main>
+      <section class="input-section">
+        <textarea id="input" placeholder="Ask a question about your documents..."></textarea>
+        <div class="controls">
+          <button id="send-btn" onclick="query()">
+            <span id="btn-text">Search</span>
+            <div id="loader" class="loader"></div>
+            <svg class="icon" viewBox="0 0 24 24">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <section id="results-section" class="results-section">
+        <div class="answer-card">
+          <div class="answer-header">
+            <svg class="icon" viewBox="0 0 24 24" style="width: 14px; height: 14px;">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            AI Answer
+          </div>
+          <div id="answer-content" class="answer-content"></div>
+        </div>
+
+        <div class="sources-header">
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+          </svg>
+          Source Documents
+        </div>
+        <div id="sources-grid" class="sources-grid">
+          <!-- Sources will be injected here -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    async function query() {
+      const questionTextarea = document.getElementById("input");
+      const question = questionTextarea.value.trim();
+      if (!question) return;
+
+      const resultsSection = document.getElementById("results-section");
+      const answerContent = document.getElementById("answer-content");
+      const sourcesGrid = document.getElementById("sources-grid");
+      const sendBtn = document.getElementById("send-btn");
+      const btnText = document.getElementById("btn-text");
+      const loader = document.getElementById("loader");
+
+      // Set loading state
+      sendBtn.disabled = true;
+      btnText.style.display = "none";
+      loader.style.display = "block";
+      resultsSection.classList.remove("active");
+
+      try {
+        const res = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question })
+        });
+
+        if (!res.ok) throw new Error("Search failed");
+
+        const data = await res.json();
+
+        // Populate results
+        answerContent.textContent = data.answer;
+
+        // Clear and populate sources
+        sourcesGrid.innerHTML = "";
+        if (data.sources && data.sources.length > 0) {
+          data.sources.forEach(source => {
+            const meta = source.metadata || {};
+            const title = meta.title || "Unknown Document";
+            const fileName = meta.file_name || "Unknown File";
+            const section = source.section_title || "";
+            const page = meta.page_index !== undefined ? `Page ${meta.page_index + 1}` : "";
+            const date = meta.publication_date || "";
+            const score = source.distance !== undefined ? (1 - source.distance).toFixed(2) : "N/A";
+
+            const sourceCard = document.createElement("div");
+            sourceCard.className = "source-card";
+            sourceCard.innerHTML = `
+              <div class="source-meta">
+                <span class="source-title">${title}</span>
+                <span class="source-tag">Relevance: ${score}</span>
+              </div>
+              <div class="source-section">${section}</div>
+              <div class="source-text">${source.document}</div>
+              <div class="source-footer">
+                <div style="font-weight: 600; color: var(--text-primary);">${fileName}</div>
+                <div>${date} ${page ? '· ' + page : ''}</div>
+              </div>
+            `;
+            sourceCard.onclick = () => sourceCard.classList.toggle("expanded");
+            sourcesGrid.appendChild(sourceCard);
+          });
+        } else {
+          sourcesGrid.innerHTML = '<p style="color: var(--text-secondary);">No sources found.</p>';
+        }
+
+        resultsSection.classList.add("active");
+
+        // Smooth scroll to results
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (error) {
+        console.error(error);
+        answerContent.textContent = "Error: " + error.message;
+        resultsSection.classList.add("active");
+      } finally {
+        sendBtn.disabled = false;
+        btnText.style.display = "block";
+        loader.style.display = "none";
+      }
+    }
+
+    // Allow Ctrl+Enter to submit
+    document.getElementById("input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        query();
+      }
+    });
+  </script>
+</body>
+
+</html>
