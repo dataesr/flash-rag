@@ -186,7 +186,7 @@ def parse(args=None):
     files = get_files(records)
 
     # Parse pdf files
-    parse_ocr(files)
+    parse_ocr(files, args.force_parse)
 
 
 if __name__ == "__main__":

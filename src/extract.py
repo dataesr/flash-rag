@@ -67,7 +67,7 @@ def extract(args=None):
 
     # Extract pdf files
     print("[warn] Only pdf files will be extracted")
-    extract_pdf(files)
+    extract_pdf(files, args.force_extract)
 
 
 if __name__ == "__main__":
