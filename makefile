@@ -1,5 +1,5 @@
 CURRENT_VERSION=$(shell grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-DOCKER_IMAGE_NAME=dataesr/rag
+DOCKER_IMAGE_NAME=dataesr/flash-rag
 GHCR_IMAGE_NAME=ghcr.io/$(DOCKER_IMAGE_NAME)
 
 build:
