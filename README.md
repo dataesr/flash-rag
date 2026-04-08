@@ -1,6 +1,6 @@
 # Flash Notes RAG
 
-Natural-language Q&A over a collection of company flash notes (JSON / plain text). This project implements a RAG (Retrieval-Augmented Generation) pipeline using ChromaDB, Mistral AI, and FastAPI.
+Natural-language Q&A over a collection of company flash notes (PDF, XLSX). This project implements a RAG (Retrieval-Augmented Generation) pipeline using ChromaDB, Mistral AI, and FastAPI.
 
 ## Architecture
 
@@ -85,7 +85,7 @@ This builds the image tagged with the current version from `pyproject.toml` and 
 ```bash
 make push
 ```
-Pushes the images to `ghcr.io/dataesr/rag`.
+Pushes the images to `ghcr.io/dataesr/flash-rag`.
 
 ### Combined Build & Push
 
@@ -108,4 +108,4 @@ The project follows a semantic versioning pattern. Releases are automated via th
    git push origin main --tags
    ```
 
-Wait for the CI/CD pipeline to pick up the new tag and deploy the image.
+Wait for the CI/CD pipeline to pick up the new tag and deploy the image.

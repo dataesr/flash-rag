@@ -16,6 +16,7 @@ COLLECTION_NAME = "flash-notes"
 def get_client() -> ClientAPI:
     print(f"[chromadb] Initializing ChromaDB at {DB_DIR}")
     client = PersistentClient(path=DB_DIR)
+    print(f"[chromadb] Collections: {', '.join([f'{c.name} ({c.count()})' for c in client.list_collections()])}")
     return client
 
 
