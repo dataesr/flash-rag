@@ -1,5 +1,6 @@
 CURRENT_VERSION=$(shell grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
 DOCKER_IMAGE_NAME=dataesr/flash-rag
+CONTAINER_NAME=flash-rag
 GHCR_IMAGE_NAME=ghcr.io/$(DOCKER_IMAGE_NAME)
 
 build:
@@ -15,11 +16,11 @@ push:
 
 run:
 	@echo "Running Docker image $(GHCR_IMAGE_NAME):$(CURRENT_VERSION)"
-	docker run -p 8000:8000 -d $(GHCR_IMAGE_NAME):$(CURRENT_VERSION)
+	docker run -p 8000:8000 -d --env-file .env -v ./data:/app/data --name $(CONTAINER_NAME) $(GHCR_IMAGE_NAME):$(CURRENT_VERSION)
 
 stop:
 	@echo "Stopping Docker image $(GHCR_IMAGE_NAME):$(CURRENT_VERSION)"
-	docker stop $(GHCR_IMAGE_NAME):$(CURRENT_VERSION)
+	docker stop $(CONTAINER_NAME)
 
 build-push:
 	@"$(MAKE)" build
