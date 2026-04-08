@@ -9,7 +9,7 @@ from chromadb import (
 # from chromadb.utils.embedding_functions import ChromaBm25EmbeddingFunction
 from src.mistral import MistralEmbeddingFunction
 
-DB_DIR = "./db"
+DB_DIR = "./data/db"
 COLLECTION_NAME = "flash-notes"
 
 
