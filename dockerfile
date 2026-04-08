@@ -5,9 +5,9 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-cache
 
-ADD ./src ./src
-ADD ./static ./static
-ADD main.py .
+COPY ./src ./src
+COPY ./static ./static
+COPY main.py .
 
 EXPOSE 8000
 
