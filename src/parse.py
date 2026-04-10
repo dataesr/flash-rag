@@ -174,10 +174,7 @@ def parse_ocr(files: pd.DataFrame, force_parse: bool = False):
 #     return pd.DataFrame()
 
 
-def parse(args=None):
-    parser = argparse.ArgumentParser(description="Parse data from ocr files")
-    parser.add_argument("--force-parse", action="store_true", help="Force parse")
-    args = parser.parse_args(args)
+def parse(force_parse: bool = False):
 
     # Get records
     records = get_records()
@@ -186,8 +183,15 @@ def parse(args=None):
     files = get_files(records)
 
     # Parse pdf files
-    parse_ocr(files, args.force_parse)
+    parse_ocr(files, force_parse)
+
+
+def parse_cli():
+    parser = argparse.ArgumentParser(description="Parse data from ocr files")
+    parser.add_argument("--force-parse", action="store_true", help="Force parse")
+    args = parser.parse_args()
+    parse(force_parse=args.force_parse)
 
 
 if __name__ == "__main__":
-    parse()
+    parse_cli()

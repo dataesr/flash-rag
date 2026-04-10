@@ -2,19 +2,14 @@ import argparse
 from src.chromadb import get_collection
 
 
-def query(args=None):
-    parser = argparse.ArgumentParser(description="Query the ChromaDB collection")
-    parser.add_argument("--query", type=str, required=True, help="Query text")
-    parser.add_argument("--k", type=int, default=5, help="Number of results to return")
-    args = parser.parse_args(args)
-
+def query(query_text: str, k: int = 5):
     # Get collection
     collection = get_collection()
 
     # Query collection
     results = collection.query(
-        query_texts=[args.query],
-        n_results=args.k,
+        query_texts=[query_text],
+        n_results=k,
     )
 
     # class QueryResult(TypedDict):
@@ -45,5 +40,13 @@ def query(args=None):
     return answer, sources
 
 
+def query_cli():
+    parser = argparse.ArgumentParser(description="Query the ChromaDB collection")
+    parser.add_argument("--query", type=str, required=True, help="Query text")
+    parser.add_argument("--k", type=int, default=5, help="Number of results to return")
+    args = parser.parse_args()
+    query(args.query, args.k)
+
+
 if __name__ == "__main__":
-    query()
+    query_cli()

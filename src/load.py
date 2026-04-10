@@ -142,32 +142,36 @@ def download_files(records: pd.DataFrame, force_download: bool = True, formats: 
     print(f"[load] Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
 
 
-def load(args=None):
-    parser = argparse.ArgumentParser(description="Load records")
-    parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching records")
-    parser.add_argument("--skip-download", action="store_true", help="Skip downloading files")
-    parser.add_argument("--force-download", action="store_true", help="Force download files")
-    args = parser.parse_args(args)
+def load(skip_fetch: bool = False, skip_download: bool = False, force_download: bool = False):
 
     # Get existing records
     existing = get_records()
 
     # Fetch new records
     new = pd.DataFrame()
-    if not args.skip_fetch:
+    if not skip_fetch:
         new = fetch_records(BASE_URL)
 
     # Merge with existing
     records = merge_records(existing, new)
 
     # Download files if needed
-    if not args.skip_download:
-        download_files(records, args.force_download)
+    if not skip_download:
+        download_files(records, force_download)
 
     # Save records
     records.to_json(OUTPUT_RECORDS, orient="records", lines=True)
     print(f"[load] Saved {len(records)} records to {OUTPUT_RECORDS}")
 
 
+def load_cli():
+    parser = argparse.ArgumentParser(description="Load records")
+    parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching records")
+    parser.add_argument("--skip-download", action="store_true", help="Skip downloading files")
+    parser.add_argument("--force-download", action="store_true", help="Force download files")
+    args = parser.parse_args()
+    load(skip_fetch=args.skip_fetch, skip_download=args.skip_download, force_download=args.force_download)
+
+
 if __name__ == "__main__":
-    load()
+    load_cli()

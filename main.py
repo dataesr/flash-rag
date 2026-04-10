@@ -19,7 +19,7 @@ class QueryRequest(BaseModel):
 async def query(payload: QueryRequest):
     question = payload.question
     print(f"[query] Received query: {question}")
-    answer, sources = run_query(["--query", question, "--k", str(payload.top_k)])
+    answer, sources = run_query(question, payload.top_k)
     return {"question": question, "answer": answer, "sources": sources}
 
 
@@ -38,46 +38,32 @@ async def update(payload: UpdateRequest):
     print(f"[update] Received update request: {payload}")
 
     # load new documents
-    load_args = []
-    if payload.load_skip_fetch:
-        load_args.append("--skip-fetch")
-    if payload.load_skip_download:
-        load_args.append("--skip-download")
-    if payload.load_force_download:
-        load_args.append("--force-download")
     print(f"\n{'='*60}")
     print("=== Loading documents ===")
     print(f"{'='*60}")
-    run_load(load_args)
+    run_load(
+        skip_fetch=payload.load_skip_fetch,
+        skip_download=payload.load_skip_download,
+        force_download=payload.load_force_download,
+    )
 
     # extract documents (OCR)
-    extract_args = []
-    if payload.extract_force:
-        extract_args.append("--force-extract")
     print(f"\n{'='*60}")
     print("=== Extracting documents ===")
     print(f"{'='*60}")
-    run_extract(extract_args)
+    run_extract(force_extract=payload.extract_force)
 
     # parse documents
-    parse_args = []
-    if payload.parse_force:
-        parse_args.append("--force-parse")
     print(f"\n{'='*60}")
     print("=== Parsing documents ===")
     print(f"{'='*60}")
-    run_parse(parse_args)
+    run_parse(force_parse=payload.parse_force)
 
     # populate collection
-    populate_args = []
-    if payload.populate_override:
-        populate_args.append("--override")
-    if payload.populate_reset:
-        populate_args.append("--reset")
     print(f"\n{'='*60}")
     print("=== Populating collection ===")
     print(f"{'='*60}")
-    run_populate(populate_args)
+    run_populate(reset=payload.populate_reset, override=payload.populate_override)
 
     print(f"\n{'='*60}")
     print("=== Update Complete ===")

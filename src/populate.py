@@ -127,11 +127,7 @@ def upsert_documents(files: pd.DataFrame, collection: Collection, override: bool
     return
 
 
-def populate(args=None):
-    parser = argparse.ArgumentParser(description="Populate ChromaDB with OCR documents")
-    parser.add_argument("--reset", action="store_true", help="Delete and recreate the collection")
-    parser.add_argument("--override", action="store_true", help="Override existing documents")
-    args = parser.parse_args(args)
+def populate(reset: bool = False, override: bool = False):
 
     # Get records
     records = get_records()
@@ -144,12 +140,20 @@ def populate(args=None):
         return
 
     # Get collection
-    collection = get_collection(args.reset)
+    collection = get_collection(reset)
 
     # Chunk and add documents
     print(f"[populate] Loading OCR files from {OCR_DIR}")
-    upsert_documents(files_with_ocr, collection, args.override)
+    upsert_documents(files_with_ocr, collection, override)
+
+
+def populate_cli():
+    parser = argparse.ArgumentParser(description="Populate ChromaDB with OCR documents")
+    parser.add_argument("--reset", action="store_true", help="Delete and recreate the collection")
+    parser.add_argument("--override", action="store_true", help="Override existing documents")
+    args = parser.parse_args()
+    populate(reset=args.reset, override=args.override)
 
 
 if __name__ == "__main__":
-    populate()
+    populate_cli()

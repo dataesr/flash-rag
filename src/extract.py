@@ -51,11 +51,7 @@ def extract_pdf(files: pd.DataFrame, force_extract: bool = False):
     print(f"[extract] Extracted {extracted}/{len(pdfs)} pdf files ({skipped=}, {failed=})")
 
 
-def extract(args=None):
-    parser = argparse.ArgumentParser(description="Extract data from records files")
-    parser.add_argument("--force-extract", action="store_true", help="Force extract")
-    args = parser.parse_args(args)
-
+def extract(force_extract: bool = False):
     # Get records
     print("[warn] Only 'article' publications will be extracted")
     records = get_records()
@@ -67,8 +63,15 @@ def extract(args=None):
 
     # Extract pdf files
     print("[warn] Only pdf files will be extracted")
-    extract_pdf(files, args.force_extract)
+    extract_pdf(files, force_extract)
+
+
+def extract_cli():
+    parser = argparse.ArgumentParser(description="Extract data from records files")
+    parser.add_argument("--force-extract", action="store_true", help="Force extract")
+    args = parser.parse_args()
+    extract(force_extract=args.force_extract)
 
 
 if __name__ == "__main__":
-    extract()
+    extract_cli()
