@@ -1,6 +1,7 @@
 import os
 import json
 import httpx
+from datetime import datetime
 
 
 def save_jsonl(data: list[dict] | dict | None, output_path: str):
@@ -59,3 +60,13 @@ def download_file(url: str, output_path: str):
             with open(output_path, "wb") as f:
                 for chunk in response.iter_bytes(chunk_size=8192):
                     f.write(chunk)
+
+
+def to_unix_epoch(date_str: str) -> int:
+    """Convert a date string to a Unix epoch timestamp."""
+    try:
+        dt = datetime.fromisoformat(date_str)
+        return int(dt.timestamp())
+    except Exception as error:
+        print(f"[error] Failed to convert date string to Unix epoch: {error}")
+        raise error

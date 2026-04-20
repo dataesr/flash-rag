@@ -1,6 +1,8 @@
 import argparse
+from datetime import datetime
 from src.chromadb import get_collection
 
+MAX_TIMESTAMP = datetime((datetime.now().year - 4), 1, 1).timestamp()  # 3 years ago + 1 year buffer
 
 def query(query_text: str, k: int = 5):
     # Get collection
@@ -10,16 +12,8 @@ def query(query_text: str, k: int = 5):
     results = collection.query(
         query_texts=[query_text],
         n_results=k,
+        where={"publication_epoch": {"$gte": MAX_TIMESTAMP}},
     )
-
-    # class QueryResult(TypedDict):
-    #     ids: List[IDs]
-    #     embeddings: Optional[List[Embeddings]]
-    #     documents: Optional[List[List[Document]]]
-    #     uris: Optional[List[List[URI]]]
-    #     metadatas: Optional[List[List[Metadata]]]
-    #     distances: Optional[List[List[float]]]
-    #     included: Include
 
     ids = results["ids"][0]
     documents = (results.get("documents") or [[]])[0]

@@ -6,6 +6,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from src.chromadb import get_collection
 from src.load import OCR_DIR, get_records, get_files
+from src.utils import to_unix_epoch
 
 load_dotenv()
 
@@ -102,6 +103,7 @@ def upsert_one_document(file: pd.Series, collection: Collection, override: bool 
         "file_format": file["file_format"],
         "doc_type": file["subtype"],
         "publication_date": file["publication_date"],
+        "publication_epoch": to_unix_epoch(file["publication_date"]),
         "created": str(file["created"]),
         "modified": str(file["modified"]),
         "title": file["title"],

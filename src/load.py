@@ -23,7 +23,9 @@ def fetch_records(url: str) -> pd.DataFrame:
         url = data.get("links", {}).get("next")
 
     df = pd.DataFrame(all_records)
-    df[["created", "modified"]] = df[["created", "modified"]].apply(pd.to_datetime, utc=True, errors="coerce")
+    df[["created", "modified"]] = df[["created", "modified"]].apply(
+        pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce"
+    )
     return df
 
 
@@ -47,7 +49,7 @@ def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
         return existing
 
     all = pd.concat([existing, new])
-    all["modified"] = all["modified"].apply(pd.to_datetime, utc=True, errors="coerce")
+    all["modified"] = all["modified"].apply(pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce")
     merged = all.sort_values("modified").drop_duplicates(subset="id", keep="last").reset_index(drop=True)
 
     print(f"[load] Merged records: {len(merged)} ({len(existing)=}, {len(new)=})")
