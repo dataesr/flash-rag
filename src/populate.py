@@ -64,7 +64,11 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                 chunks.append(
                     {
                         "id": f"{file_name}_p{page_index}_s{section_index}_{chunk_index}",
-                        "document": chunk,
+                        "document": (
+                            f'{chunk}\n\nKeywords: {", ".join(document_metadata["keywords"])}'
+                            if isinstance(document_metadata.get("keywords", []), list)
+                            else chunk
+                        ),
                         "metadata": {
                             **document_metadata,
                             "page_index": page_index,
@@ -107,6 +111,7 @@ def upsert_one_document(file: pd.Series, collection: Collection, override: bool 
         "created": str(file["created"]),
         "modified": str(file["modified"]),
         "title": file["title"],
+        "keywords": ", ".join(file["keywords"]) if isinstance(file.get("keywords", []), list) else "",
     }
     print(f"[populate] Upserting document {path}")
     chunks = chunk_document(path, document_metadata)

@@ -82,7 +82,7 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
 
         # Get metadata
         metadata = exploded["metadata"]
-        metadata_data = pd.json_normalize(metadata)[["title", "publication_date", "description"]].reset_index(drop=True)
+        metadata_data = pd.json_normalize(metadata)[["title", "publication_date", "description", "keywords"]].reset_index(drop=True)
 
         # Get resource types
         resource_types = metadata.apply(lambda x: x.get("resource_type") if isinstance(x, dict) else None)
