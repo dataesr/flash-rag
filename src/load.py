@@ -1,4 +1,5 @@
 import os
+import time
 import argparse
 import pandas as pd
 from src.utils import fetch_data, download_file
@@ -9,17 +10,40 @@ OCR_DIR = f"{OUTPUT_DIR}/ocr"
 OUTPUT_RECORDS = f"{OUTPUT_DIR}/records.jsonl"
 
 
-def fetch_records(url: str) -> pd.DataFrame:
+def fetch_records(url: str, rate_limit: int = 90) -> pd.DataFrame:
+    """
+    Fetch all records from a paginated URL, respecting a rate limit.
+
+    Args:
+        url: The initial URL to fetch from.
+        rate_limit: Max requests per minute (default: 90, safely under the 100/min limit).
+    """
     all_records = []
     page = 0
+    request_count = 0
+    window_start = time.time()
+
     while url:
         page += 1
+
+        # Rate limiting: if we've hit the limit within the current window, wait out the remainder
+        elapsed = time.time() - window_start
+        if request_count >= rate_limit:
+            wait = 60 - elapsed
+            if wait > 0:
+                print(f"[load] Rate limit reached ({request_count} req). Waiting {wait:.1f}s...")
+                time.sleep(wait)
+            # Reset window
+            request_count = 0
+            window_start = time.time()
+
         print(f"[load] Fetching page {page}: {url}")
         data = fetch_data(url)
+        request_count += 1
+
         hits = data.get("hits", {}).get("hits", [])
         all_records.extend(hits)
         print(f"[load]  → Got {len(hits)} hits (total: {len(all_records)})")
-        # use pagination
         url = data.get("links", {}).get("next")
 
     df = pd.DataFrame(all_records)

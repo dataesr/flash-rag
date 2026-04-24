@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Literal
 from src.load import load
 from src.extract import extract
 from src.parse import parse
@@ -25,6 +26,7 @@ class PopulateRequest(BaseModel):
 
 
 class UpdateRequest(LoadRequest, ExtractRequest, ParseRequest, PopulateRequest):
+    task: Literal["all", "load", "extract", "parse", "populate"] = "all"
     pass
 
 
@@ -65,10 +67,18 @@ def run_populate(payload: PopulateRequest):
 
 
 def run_update(payload: UpdateRequest):
-    run_load(LoadRequest(**payload.model_dump()))
-    run_extract(ExtractRequest(**payload.model_dump()))
-    run_parse(ParseRequest(**payload.model_dump()))
-    run_populate(PopulateRequest(**payload.model_dump()))
+
+    if payload.task in ["all", "load"]:
+        run_load(LoadRequest(**payload.model_dump()))
+
+    if payload.task in ["all", "extract"]:
+        run_extract(ExtractRequest(**payload.model_dump()))
+
+    if payload.task in ["all", "parse"]:
+        run_parse(ParseRequest(**payload.model_dump()))
+
+    if payload.task in ["all", "populate"]:
+        run_populate(PopulateRequest(**payload.model_dump()))
 
     print(f"\n{'='*60}")
     print("=== Update Complete ===")
