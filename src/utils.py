@@ -46,6 +46,9 @@ def fetch_data(url: str) -> dict:
             response = client.get(url, timeout=30)
             response.raise_for_status()
             return response.json()
+        except httpx.HTTPStatusError as error:
+            print(f"[error] HTTP error while requesting {url}: {error}")
+            raise error
         except Exception as error:
             print(f"[error] An error occurred while requesting {url}: {error}")
             raise error
