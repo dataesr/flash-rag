@@ -65,8 +65,8 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                     {
                         "id": f"{file_name}_p{page_index}_s{section_index}_{chunk_index}",
                         "document": (
-                            f'{chunk}\n\nKeywords: {", ".join(document_metadata["keywords"])}'
-                            if isinstance(document_metadata.get("keywords", []), list)
+                            f'{chunk}\n\nKeywords: {document_metadata["keywords"]}'
+                            if len(document_metadata.get("keywords", ""))
                             else chunk
                         ),
                         "metadata": {
