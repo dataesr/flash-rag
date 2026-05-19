@@ -109,7 +109,7 @@
             const meta = source.metadata || {};
             const title = meta.title || "Unknown Document";
             const fileName = meta.file_name || "Unknown File";
-            const section = source.section_title || "";
+            const section = meta.section_title || "";
             const page = meta.page_index !== undefined ? `Page ${meta.page_index + 1}` : "";
             const date = meta.publication_date || "";
             const score = source.distance !== undefined ? (1 - source.distance).toFixed(2) : "N/A";
@@ -124,7 +124,7 @@
               <div class="source-section">${section}</div>
               <div class="source-text">${source.document}</div>
               <div class="source-footer">
-                <div style="font-weight: 600; color: var(--text-primary);">${fileName}</div>
+                <div class="source-title">${fileName}</div>
                 <div>${date} ${page ? '· ' + page : ''}</div>
               </div>
             `;
