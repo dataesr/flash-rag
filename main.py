@@ -8,16 +8,16 @@ app = FastAPI(title="Flash Notes RAG API")
 
 
 class QueryRequest(BaseModel):
-    question: str
+    query: str
     top_k: int = 5
 
 
 @app.post("/query")
 async def query(payload: QueryRequest):
-    question = payload.question
-    print(f"[query] Received query: {question}")
-    answer, sources = run_query(question, payload.top_k)
-    return {"question": question, "answer": answer, "sources": sources}
+    query = payload.query
+    print(f"[query] Received query: {query}")
+    answer, sources = run_query(query, payload.top_k)
+    return {"query": query, "answer": answer, "sources": sources}
 
 
 @app.post("/update")
