@@ -3,6 +3,7 @@ from datetime import datetime
 from src.chromadb import get_collection
 
 MAX_TIMESTAMP = datetime((datetime.now().year - 4), 1, 1).timestamp()  # 3 years ago + 1 year buffer
+MIN_CHUNK_LEN = 50  # Minimum chunk length to consider for querying
 
 
 def sources_to_publications(sources: list):
@@ -48,7 +49,12 @@ def query(query_text: str, k: int = 5):
     results = collection.query(
         query_texts=[query_text],
         n_results=k,
-        where={"publication_epoch": {"$gte": MAX_TIMESTAMP}},
+        where={
+            "$and": [
+                {"publication_epoch": {"$gte": MAX_TIMESTAMP}},
+                {"chunk_len": {"$gte": MIN_CHUNK_LEN}},
+            ]
+        },
     )
 
     ids = results["ids"][0]
@@ -67,7 +73,7 @@ def query(query_text: str, k: int = 5):
 
     answer = "AI answer is not implemented yet..."
 
-    return answer, sources, sources_to_publications(sources)
+    return answer, sources
 
 
 def query_cli():

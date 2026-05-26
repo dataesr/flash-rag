@@ -12,6 +12,7 @@ load_dotenv()
 
 BATCH_SIZE = 50  # Batch size for upserts
 CHUNK_MAX_CHARS = 8000
+KEYWORDS_PREFIX = "\n\nKeywords: "
 
 
 def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
@@ -64,17 +65,19 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                 chunks.append(
                     {
                         "id": f"{file_name}_p{page_index}_s{section_index}_{chunk_index}",
-                        "document": (
-                            f'{chunk}\n\nKeywords: {document_metadata["keywords"]}'
-                            if len(document_metadata.get("keywords", ""))
-                            else chunk
-                        ),
+                        # "document": (
+                        #     f'{chunk}{KEYWORDS_PREFIX}{document_metadata["keywords"]}'
+                        #     if len(document_metadata.get("keywords", ""))
+                        #     else chunk
+                        # ),
+                        "document": chunk,
                         "metadata": {
                             **document_metadata,
                             "page_index": page_index,
                             "section_title": title[:200],  # Truncate for metadata
                             "section_level": level,
                             "chunk_type": "paragraph",
+                            "chunk_len": len(chunk),
                         },
                     }
                 )
@@ -102,6 +105,7 @@ def upsert_chunks(chunks: list[dict], collection: Collection, override: bool = F
 def upsert_one_document(file: pd.Series, collection: Collection, override: bool = False) -> int:
     path = file["ocr_path"]
     document_metadata = {
+        "record_id": file["id"],
         "file_id": file["file_id"],
         "file_name": file["file_name"],
         "file_format": file["file_format"],
