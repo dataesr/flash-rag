@@ -39,6 +39,7 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
             status = error.response.status_code
             if status == 429:
                 wait = 5
+                page -= 1  # retry current page
                 print(f"[load] Rate limit reached ({request_count} req). Waiting {wait:.1f}s...")
                 time.sleep(wait)
             elif status == 422:
@@ -77,7 +78,7 @@ def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     all["modified"] = all["modified"].apply(pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce")
     merged = all.sort_values("modified").drop_duplicates(subset="id", keep="last").reset_index(drop=True)
 
-    print(f"[load] Merged records: {len(merged)} ({len(existing)=}, {len(new)=})")
+    print(f"[load] Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(new)})")
     return merged
 
 
