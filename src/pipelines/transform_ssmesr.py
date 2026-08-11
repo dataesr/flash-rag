@@ -1,0 +1,137 @@
+import os
+import json
+import argparse
+import pandas as pd
+from src.pipelines.load_ssmesr import OCR_DIR, get_records, get_files
+from src.utils import save_jsonl, to_unix_epoch
+
+OUTPUT_DIR = "./data"
+OUTPUT_CHUNKS = f"{OUTPUT_DIR}/ssmesr_chunks.jsonl"
+CHUNK_MAX_CHARS = 8000
+
+
+def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
+    file_id = document_metadata["file_id"]
+
+    try:
+        with open(ocr_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as error:
+        print(f"[transform_ssmesr] Error loading {ocr_path}: {error}")
+        return []
+
+    pages = data.get("pages", [])
+    if not pages:
+        return []
+
+    chunks = []
+    for page in pages:
+        page_index = page.get("index", 0)
+        parsed_sections = page.get("parsed", [])
+
+        if not parsed_sections:
+            continue
+
+        for section_index, section in enumerate(parsed_sections):
+            title = section.get("title", "")
+            level = section.get("level", 0)
+            paragraphs = section.get("paragraphs", [])
+            # tables = section.get("tables", []) #TODO: implement table parsing
+
+            if not paragraphs:
+                # print(f"[transform_ssmesr] {file_name}: No paragraphs found in section {section_index} of page {page_index}")
+                continue
+
+            current_doc = ""
+            current_chunks = []
+            for para in paragraphs:
+                next_doc = current_doc + "\n\n" + para if current_doc else para
+                if len(next_doc) <= CHUNK_MAX_CHARS:
+                    current_doc = next_doc
+                else:
+                    current_chunks.append(current_doc)
+                    current_doc = para
+            current_chunks.append(current_doc)
+
+            if len(current_chunks) > 1:
+                print(
+                    f"[transform_ssmesr] {file_id}: Section={section_index}, page={page_index} --> {len(current_chunks)} chunks"
+                )
+
+            for chunk_index, chunk in enumerate(current_chunks):
+                chunks.append(
+                    {
+                        "id": f"ssmesr_{file_id}_p{page_index}_s{section_index}_{chunk_index}",
+                        "document": chunk,
+                        "metadata": {
+                            **document_metadata,
+                            "page_index": page_index,
+                            "section_title": title[:200],
+                            "section_level": level,
+                            "chunk_type": "paragraph",
+                            "chunk_len": len(chunk),
+                        },
+                    }
+                )
+    return chunks
+
+
+def build_document_metadata(file: pd.Series) -> dict:
+    return {
+        "source": "ssmesr",
+        "record_id": file["id"],
+        "file_id": file.get("file_id", ""),
+        "file_name": file.get("file_name", ""),
+        "file_format": file.get("file_format", ""),
+        "doc_type": file.get("subtype", ""),
+        "publication_date": str(file.get("publication_date", "")),
+        "publication_epoch": to_unix_epoch(str(file.get("publication_date", ""))) if file.get("publication_date") else 0,
+        "created": str(file.get("created", "")),
+        "modified": str(file.get("modified", "")),
+        "title": file.get("title", ""),
+        "keywords": (
+            ", ".join(file.get("keywords", [])) if isinstance(file.get("keywords"), list) else str(file.get("keywords", ""))
+        ),
+    }
+
+
+def transform(use_cache: bool = True) -> list[dict]:
+    if use_cache and os.path.exists(OUTPUT_CHUNKS):
+        print(f"[transform_ssmesr] Chunks already exist in {OUTPUT_CHUNKS}, skipping")
+        return pd.read_json(OUTPUT_CHUNKS, lines=True, encoding="utf-8").to_dict(orient="records")
+
+    records = get_records()
+    if records.empty:
+        print("[transform_ssmesr] No SSMESR records found")
+        return []
+
+    # Get files
+    files = get_files(records)
+    if files.empty:
+        print("[transform_ssmesr] No SSMESR files found")
+        return []
+
+    files_with_ocr = files[files["ocr_path"].apply(os.path.exists)]
+    print(f"[transform_ssmesr] Found {len(files_with_ocr)} files with OCR")
+    if files_with_ocr.empty:
+        return []
+
+    chunks: list[dict] = []
+    for _, file in files_with_ocr.iterrows():
+        metadata = build_document_metadata(file)
+        chunks.extend(chunk_document(file["ocr_path"], metadata))
+
+    print(f"[transform_ssmesr] Generated {len(chunks)} SSMESR chunks")
+    save_jsonl(chunks, OUTPUT_CHUNKS)
+    return chunks
+
+
+def transform_cli():
+    parser = argparse.ArgumentParser(description="Transform SSMESR OCR results into chunked documents")
+    parser.add_argument("--no-cache", action="store_true", help="Force reload of chunks")
+    args = parser.parse_args()
+    transform(use_cache=not args.no_cache)
+
+
+if __name__ == "__main__":
+    transform_cli()

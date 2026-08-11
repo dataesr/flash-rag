@@ -8,7 +8,7 @@ from src.utils import fetch_data, download_file
 BASE_URL = "https://zenodo.org/api/records?communities=ssm-esr&size=25&page=1"
 OUTPUT_DIR = "./data"
 OCR_DIR = f"{OUTPUT_DIR}/ocr"
-OUTPUT_RECORDS = f"{OUTPUT_DIR}/records.jsonl"
+OUTPUT_RECORDS = f"{OUTPUT_DIR}/ssmesr_records.jsonl"
 
 
 def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
@@ -26,24 +26,24 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
     while url:
         page += 1
 
-        print(f"[load] Fetching page {page}: {url}")
+        print(f"[load-ssmesr] Fetching page {page}: {url}")
         try:
             data = fetch_data(url)
             request_count += 1
 
             hits = data.get("hits", {}).get("hits", [])
             all_records.extend(hits)
-            print(f"[load]  → Got {len(hits)} hits (total: {len(all_records)})")
+            print(f"[load-ssmesr]  → Got {len(hits)} hits (total: {len(all_records)})")
             url = data.get("links", {}).get("next")
         except httpx.HTTPStatusError as error:
             status = error.response.status_code
             if status == 429:
                 wait = 5
                 page -= 1  # retry current page
-                print(f"[load] Rate limit reached ({request_count} req). Waiting {wait:.1f}s...")
+                print(f"[load-ssmesr] Rate limit reached ({request_count} req). Waiting {wait:.1f}s...")
                 time.sleep(wait)
             elif status == 422:
-                print(f"[load] Unprocessable request for {url}, skipping.")
+                print(f"[load-ssmesr] Unprocessable request for {url}, skipping.")
                 raise error
             else:
                 raise
@@ -58,37 +58,37 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
 def get_records() -> pd.DataFrame:
     if os.path.exists(OUTPUT_RECORDS):
         records = pd.read_json(OUTPUT_RECORDS, lines=True, encoding="utf-8")
-        print(f"[load] Found {len(records)} existing records")
+        print(f"[load-ssmesr] Found {len(records)} existing records")
         return records
-    print("[load] No existing records found")
+    print("[load-ssmesr] No existing records found")
     return pd.DataFrame()
 
 
 def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     if len(existing) == 0 and len(new) == 0:
-        raise ValueError("[load] No existing nor new records found")
+        raise ValueError("[load-ssmesr] No existing nor new records found")
     if len(existing) == 0:
-        print(f"[load] No existing records found -- using new {len(new)} records")
+        print(f"[load-ssmesr] No existing records found -- using new {len(new)} records")
         return new
     if len(new) == 0:
-        print(f"[load] No new records found -- continue with existing {len(existing)} records")
+        print(f"[load-ssmesr] No new records found -- continue with existing {len(existing)} records")
         return existing
 
     all = pd.concat([existing, new])
     all["modified"] = all["modified"].apply(pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce")
     merged = all.sort_values("modified").drop_duplicates(subset="id", keep="last").reset_index(drop=True)
 
-    print(f"[load] Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(new)})")
+    print(f"[load-ssmesr] Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(new)})")
     return merged
 
 
 def get_files(records: pd.DataFrame) -> pd.DataFrame:
     if not len(records):
-        print("[load] Records dataframe is empty")
+        print("[load-ssmesr] Records dataframe is empty")
         return pd.DataFrame()
 
     if "files" not in records.columns:
-        print("[load] No column 'files' found on records dataframe")
+        print("[load-ssmesr] No column 'files' found on records dataframe")
         return pd.DataFrame()
 
     # Explode df on files column
@@ -108,7 +108,9 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
 
         # Get metadata
         metadata = exploded["metadata"]
-        metadata_data = pd.json_normalize(metadata)[["title", "publication_date", "description", "keywords"]].reset_index(drop=True)
+        metadata_data = pd.json_normalize(metadata)[["title", "publication_date", "description", "keywords"]].reset_index(
+            drop=True
+        )
 
         # Get resource types
         resource_types = metadata.apply(lambda x: x.get("resource_type") if isinstance(x, dict) else None)
@@ -120,11 +122,11 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
         print(f"[error] Error while exploding files: {error}")
         raise error
 
-    print(f"[load] Found {len(files)} files from {len(records)} records")
+    print(f"[load-ssmesr] Found {len(files)} files from {len(records)} records")
     return files
 
 
-def download_one_file(file: pd.Series, force_download: bool = True) -> str:
+def download_one_file(file: pd.Series, use_cache: bool = True) -> str:
     url = file["file_url"]
     path = file["file_path"]
     name = file["file_name"]
@@ -133,7 +135,7 @@ def download_one_file(file: pd.Series, force_download: bool = True) -> str:
         return "failed"
     if name == "empty_file.txt":
         return "skipped"
-    if not force_download and os.path.exists(path):
+    if use_cache and os.path.exists(path):
         return "skipped"
     try:
         download_file(url, path)
@@ -144,10 +146,10 @@ def download_one_file(file: pd.Series, force_download: bool = True) -> str:
         return "failed"
 
 
-def download_files(records: pd.DataFrame, force_download: bool = True, formats: list[str] = []):
+def download_files(records: pd.DataFrame, use_cache: bool = True, formats: list[str] = []):
     total_records = len(records)
 
-    print(f"[load] Starting to download files from {total_records} records")
+    print(f"[load-ssmesr] Starting to download files from {total_records} records")
 
     # Get files from records
     files = get_files(records)
@@ -155,11 +157,11 @@ def download_files(records: pd.DataFrame, force_download: bool = True, formats: 
         files = files[files["file_format"].isin(formats)]
 
     if not len(files):
-        print(f"[load] Found 0 files from {len(records)} records to download")
+        print(f"[load-ssmesr] Found 0 files from {len(records)} records to download")
         return
 
     # Download files
-    stats = files.apply(download_one_file, force_download=force_download, axis=1)
+    stats = files.apply(download_one_file, use_cache=use_cache, axis=1)
 
     # Count stats
     stats_counts = stats.value_counts()
@@ -167,38 +169,35 @@ def download_files(records: pd.DataFrame, force_download: bool = True, formats: 
     skipped = int(stats_counts.get("skipped", 0))
     failed = int(stats_counts.get("failed", 0))
 
-    print(f"[load] Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
+    print(f"[load-ssmesr] Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
 
 
-def load(skip_fetch: bool = False, skip_download: bool = False, force_download: bool = False):
+def load(use_cache: bool = True):
 
     # Get existing records
     existing = get_records()
 
     # Fetch new records
     new = pd.DataFrame()
-    if not skip_fetch:
+    if not use_cache:
         new = fetch_records(BASE_URL)
 
     # Merge with existing
     records = merge_records(existing, new)
 
     # Download files if needed
-    if not skip_download:
-        download_files(records, force_download)
+    download_files(records, use_cache)
 
     # Save records
     records.to_json(OUTPUT_RECORDS, orient="records", lines=True)
-    print(f"[load] Saved {len(records)} records to {OUTPUT_RECORDS}")
+    print(f"[load-ssmesr] Saved {len(records)} records to {OUTPUT_RECORDS}")
 
 
 def load_cli():
     parser = argparse.ArgumentParser(description="Load records")
-    parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching records")
-    parser.add_argument("--skip-download", action="store_true", help="Skip downloading files")
-    parser.add_argument("--force-download", action="store_true", help="Force download files")
+    parser.add_argument("--no-cache", action="store_true", help="Force reload of data")
     args = parser.parse_args()
-    load(skip_fetch=args.skip_fetch, skip_download=args.skip_download, force_download=args.force_download)
+    load(use_cache=not args.no_cache)
 
 
 if __name__ == "__main__":

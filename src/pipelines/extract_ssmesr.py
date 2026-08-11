@@ -1,8 +1,10 @@
+import os
 import re
 import argparse
 import pandas as pd
-from src.load import get_records, get_files
+from src.mistral import mistral_ocr
 from src.utils import save_jsonl, load_jsonl
+from src.pipelines.load_ssmesr import get_records, get_files
 
 
 def parse_table(md: str) -> dict | None:
@@ -72,7 +74,7 @@ def parse_markdown(md: str) -> list[dict] | None:
     return sections
 
 
-def parse_one_ocr(file: pd.Series, force_parse: bool = False) -> pd.Series:
+def parse_one_ocr(file: pd.Series, use_cache: bool = True) -> pd.Series:
     file_name = file["file_name"]
     file_path = file["file_path"]
     file_format = file["file_format"]
@@ -80,31 +82,32 @@ def parse_one_ocr(file: pd.Series, force_parse: bool = False) -> pd.Series:
 
     results = pd.Series({"parsed": 0, "skipped": 0, "failed": 0, "empty": 0, "total": 0, "file": "failed"})
 
+    # Only pdf
     if not file_format == "pdf":
-        print(f"[parse] Skipping {file_name} ({file_format=})")
+        print(f"[parse-ssmesr] Skipping {file_name} ({file_format=})")
         results["file"] = "skipped"
         return results
 
     if not ocr_path:
-        print(f"[parse] No ocr_path found for {file_name} ({file_path=})")
+        print(f"[parse-ssmesr] No ocr_path found for {file_name} ({file_path=})")
         return results
 
     ocr_data = load_jsonl(ocr_path)
     if not ocr_data:
-        print(f"[parse] No data found in {ocr_path}")
+        print(f"[parse-ssmesr] No data found in {ocr_path}")
         return results
 
     if not isinstance(ocr_data, dict):
-        print(f"[parse] Invalid data type in {ocr_path} ({type(ocr_data)=})")
+        print(f"[parse-ssmesr] Invalid data type in {ocr_path} ({type(ocr_data)=})")
         return results
 
     ocr_pages = ocr_data.get("pages")
     if not ocr_pages:
-        print(f"[parse] No pages found in {ocr_path}")
+        print(f"[parse-ssmesr] No pages found in {ocr_path}")
         return results
 
     if not isinstance(ocr_pages, list):
-        print(f"[parse] Invalid data type in {ocr_path} ({type(ocr_pages)=})")
+        print(f"[parse-ssmesr] Invalid data type in {ocr_path} ({type(ocr_pages)=})")
         return results
 
     # print(f"[debug] ocr_pages: {len(ocr_pages)}")
@@ -114,12 +117,12 @@ def parse_one_ocr(file: pd.Series, force_parse: bool = False) -> pd.Series:
         md = page.get("markdown")
         parsed = page.get("parsed")
 
-        if not force_parse and parsed:
+        if use_cache and parsed:
             results["skipped"] += 1
             continue
 
         if not md:
-            print(f"[parse] No markdown found in page {page['index']} of {ocr_path}")
+            print(f"[parse-ssmesr] No markdown found in page {page['index']} of {ocr_path}")
             results["empty"] += 1
             continue
 
@@ -147,13 +150,13 @@ def parse_one_ocr(file: pd.Series, force_parse: bool = False) -> pd.Series:
     return results
 
 
-def parse_ocr(files: pd.DataFrame, force_parse: bool = False):
+def parse_ocr(files: pd.DataFrame, use_cache: bool = True):
     if not len(files):
-        print("[parse] Found 0 files to parse")
+        print("[parse-ssmesr] Found 0 files to parse")
         return
 
     # Parse pdf files
-    stats = files.apply(parse_one_ocr, force_parse=force_parse, axis=1)
+    stats = files.apply(parse_one_ocr, use_cache=use_cache, axis=1)
 
     # Count stats
     parsed = int(stats["parsed"].sum())
@@ -161,37 +164,81 @@ def parse_ocr(files: pd.DataFrame, force_parse: bool = False):
     failed = int(stats["failed"].sum())
     empty = int(stats["empty"].sum())
     total = int(stats["total"].sum())
-    print(f"[parse] Parsed {len(files)} files")
-    print(f"[parse] Parsed {parsed}/{total} pages ({skipped=}, {failed=}, {empty=})")
+    print(f"[parse-ssmesr] Parsed {len(files)} files")
+    print(f"[parse-ssmesr] Parsed {parsed}/{total} pages ({skipped=}, {failed=}, {empty=})")
 
 
-# def get_parsed() -> pd.DataFrame:
-#     if os.path.exists(OUTPUT_PARSED):
-#         parsed = pd.read_json(OUTPUT_PARSED, lines=True, encoding="utf-8")
-#         print(f"[parse] Found {len(parsed)} existing parsed files")
-#         return parsed
-#     print("[parse] No existing parsed files found")
-#     return pd.DataFrame()
+def extract_one(file: pd.Series, use_cache: bool = True) -> str:
+    file_name = file["file_name"]
+    file_path = file["file_path"]
+    ocr_path = file["ocr_path"]
+
+    if not ocr_path or not file_path:
+        return "failed"
+
+    if use_cache and os.path.exists(ocr_path):
+        return "skipped"
+
+    try:
+        data = mistral_ocr(file_path, file_name)
+        save_jsonl(data, ocr_path)
+        return "extracted"
+    except Exception as error:
+        print(f"[error] Failed to extract {file_name}: {error}")
+        print(f"[debug] {ocr_path=}, {file_path=}")
+        return "failed"
 
 
-def parse(force_parse: bool = False):
+def extract_pdf(files: pd.DataFrame, use_cache: bool = True):
+    if not len(files):
+        print("[extract-ssmesr] Found 0 files to extract")
+        return
 
+    pdfs = files[files["file_format"].isin(["pdf"])]
+    print(f"[extract-ssmesr] Found {len(pdfs)} pdf from {len(files)} files")
+
+    if not len(pdfs):
+        print(f"[extract-ssmesr] Found 0 pdf files from {len(files)} files to extract")
+        return
+
+    # Extract pdf files
+    stats = pdfs.apply(extract_one, use_cache=use_cache, axis=1)
+
+    # Count stats
+    stats_counts = stats.value_counts()
+    extracted = int(stats_counts.get("extracted", 0))
+    skipped = int(stats_counts.get("skipped", 0))
+    failed = int(stats_counts.get("failed", 0))
+
+    print(f"[extract-ssmesr] Extracted {extracted}/{len(pdfs)} pdf files ({skipped=}, {failed=})")
+
+
+def extract(use_cache: bool = True):
     # Get records
+    print("[warn] Only 'article' publications will be extracted")
     records = get_records()
+    records = records[records["metadata"].apply(lambda x: x.get("resource_type", {}).get("subtype") == "article")]
+    print(f"[extract-ssmesr] Found {len(records)} 'article' records")
 
     # Get files from records
     files = get_files(records)
 
-    # Parse pdf files
-    parse_ocr(files, force_parse)
+    # Extract pdf files
+    print("[warn] Only pdf files will be extracted")
+    extract_pdf(files, use_cache)
+
+    # Parse ocr results
+    parse_ocr(files, use_cache)
 
 
-def parse_cli():
-    parser = argparse.ArgumentParser(description="Parse data from ocr files")
-    parser.add_argument("--force-parse", action="store_true", help="Force parse")
+def extract_cli():
+    parser = argparse.ArgumentParser(description="Extract data from records files using OCR")
+    parser.add_argument("--no-cache", action="store_true", help="Force extract and parsing")
     args = parser.parse_args()
-    parse(force_parse=args.force_parse)
+
+    # Extract and parse pdf files
+    extract(use_cache=not args.use_cache)
 
 
 if __name__ == "__main__":
-    parse_cli()
+    extract_cli()
