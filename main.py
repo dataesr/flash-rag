@@ -16,9 +16,8 @@ class QueryRequest(BaseModel):
 
 @app.post("/query")
 async def query(payload: QueryRequest):
-    query = payload.query
-    print(f"[query] Received query: {query}")
-    answer, sources = run_query(query, payload.source, payload.top_k)
+    print(f"[query] Received query request: {payload}")
+    answer, sources = run_query(payload.query, payload.source, payload.top_k)
     return {"query": query, "answer": answer, "sources": sources}
 
 

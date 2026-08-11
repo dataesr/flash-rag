@@ -1,0 +1,80 @@
+name: Production deployment
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+env:
+  DEPLOYMENT: flash-rag
+  DEPLOYMENT_NAMESPACE: flash-rag
+  DEPLOYMENT_URL: https://flash-rag.staging.dataesr.ovh
+  MM_NOTIFICATION_CHANNEL: bots
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/dataesr/flash-rag
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Get tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          secrets: |
+            NODE_AUTH_TOKEN=${{ secrets.GH_PKG_TOKEN }}
+
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Deploy to cluster
+        uses: dataesr/kubectl-deploy@v1.1
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_DOAD_PROD }}
+        with:
+          namespace: ${{ env.DEPLOYMENT_NAMESPACE }}
+          restart: ${{ env.DEPLOYMENT }}
+
+  notify:
+    name: Notify
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dataesr/mm-notifier-action@v1.0.3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          mattermost_webhook_url: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          mattermost_channel: ${{ env.MM_NOTIFICATION_CHANNEL }}
+          deployment_url: ${{ env.DEPLOYMENT_URL }}

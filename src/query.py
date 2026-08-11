@@ -53,9 +53,8 @@ def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: 
             {"chunk_len": {"$gte": MIN_CHUNK_LEN}},
         ]
     }
-
     if source != "all":
-        where_filter["$and"].append({"source": source})  # ty:ignore[invalid-argument-type]
+        where_filter["$and"].append({"source": {"$eq": source}})  # ty:ignore[invalid-argument-type]
 
     # Query collection
     results = collection.query(query_texts=[query_text], n_results=k, where=where_filter)
@@ -74,7 +73,7 @@ def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: 
             }
         )
 
-    answer = "AI answer is not implemented yet..."
+    answer = "AI answer is not implemented yet!..."
 
     return answer, sources
 

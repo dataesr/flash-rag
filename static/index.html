@@ -92,7 +92,7 @@
         const res = await fetch("/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question })
+          body: JSON.stringify({ query: question })
         });
 
         if (!res.ok) throw new Error("Search failed");
