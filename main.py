@@ -1,14 +1,16 @@
+from typing import Literal
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from src.query import query as run_query
-from src.update import run_update, UpdateRequest
+from src.update import update as run_update, UpdateRequest
 
 app = FastAPI(title="Flash Notes RAG API")
 
 
 class QueryRequest(BaseModel):
     query: str
+    source: Literal["all", "eesr", "ssmesr"] = "all"
     top_k: int = 5
 
 
@@ -16,7 +18,7 @@ class QueryRequest(BaseModel):
 async def query(payload: QueryRequest):
     query = payload.query
     print(f"[query] Received query: {query}")
-    answer, sources = run_query(query, payload.top_k)
+    answer, sources = run_query(query, payload.source, payload.top_k)
     return {"query": query, "answer": answer, "sources": sources}
 
 
