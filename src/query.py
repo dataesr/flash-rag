@@ -1,3 +1,4 @@
+from typing import Literal
 import argparse
 from datetime import datetime
 from src.chromadb import get_collection
@@ -41,21 +42,23 @@ def sources_to_publications(sources: list):
     return sorted(publications.values(), key=lambda x: x["distance"])
 
 
-def query(query_text: str, k: int = 5):
+def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: int = 5):
     # Get collection
     collection = get_collection()
 
+    # Build where filter
+    where_filter = {
+        "$and": [
+            {"publication_epoch": {"$gte": MAX_TIMESTAMP}},
+            {"chunk_len": {"$gte": MIN_CHUNK_LEN}},
+        ]
+    }
+
+    if source != "all":
+        where_filter["$and"].append({"source": source})  # ty:ignore[invalid-argument-type]
+
     # Query collection
-    results = collection.query(
-        query_texts=[query_text],
-        n_results=k,
-        where={
-            "$and": [
-                {"publication_epoch": {"$gte": MAX_TIMESTAMP}},
-                {"chunk_len": {"$gte": MIN_CHUNK_LEN}},
-            ]
-        },
-    )
+    results = collection.query(query_texts=[query_text], n_results=k, where=where_filter)
 
     ids = results["ids"][0]
     documents = (results.get("documents") or [[]])[0]
@@ -79,6 +82,7 @@ def query(query_text: str, k: int = 5):
 def query_cli():
     parser = argparse.ArgumentParser(description="Query the ChromaDB collection")
     parser.add_argument("--query", type=str, required=True, help="Query text")
+    parser.add_argument("--source", choices=["all", "eesr", "ssmesr"], default="all", help="Source to query")
     parser.add_argument("--k", type=int, default=5, help="Number of results to return")
     args = parser.parse_args()
     query(args.query, args.k)
