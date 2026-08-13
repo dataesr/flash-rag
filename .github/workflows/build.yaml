@@ -47,7 +47,7 @@ jobs:
       - name: Deploy to cluster
         uses: dataesr/kubectl-deploy@v1.1
         env:
-          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_DOAD_PROD }}
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_DOAD_STAGING }}
         with:
           namespace: ${{ env.DEPLOYMENT_NAMESPACE }}
           restart: ${{ env.DEPLOYMENT }}
