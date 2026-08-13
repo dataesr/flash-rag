@@ -9,6 +9,9 @@ COPY ./src ./src
 COPY ./static ./static
 COPY main.py .
 
+# Add EESR data
+COPY PAGE_EESR19.zip .
+
 EXPOSE 8000
 
 CMD ["uv", "run", "fastapi", "run", "main.py", "--host", "0.0.0.0", "--port", "8000"]

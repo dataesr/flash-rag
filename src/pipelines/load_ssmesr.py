@@ -172,7 +172,7 @@ def download_files(records: pd.DataFrame, use_cache: bool = True, formats: list[
     print(f"[load-ssmesr] Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
 
 
-def load(use_cache: bool = True):
+def load(use_cache: bool = True, force_download: bool = False):
 
     # Get existing records
     existing = get_records()
@@ -186,7 +186,7 @@ def load(use_cache: bool = True):
     records = merge_records(existing, new)
 
     # Download files if needed
-    download_files(records, use_cache)
+    download_files(records, use_cache=not force_download)
 
     # Save records
     records.to_json(OUTPUT_RECORDS, orient="records", lines=True)
@@ -196,8 +196,9 @@ def load(use_cache: bool = True):
 def load_cli():
     parser = argparse.ArgumentParser(description="Load records")
     parser.add_argument("--no-cache", action="store_true", help="Force reload of data")
+    parser.add_argument("--force-download", action="store_true", help="Force redownload of data")
     args = parser.parse_args()
-    load(use_cache=not args.no_cache)
+    load(use_cache=not args.no_cache, force_download=args.force_download)
 
 
 if __name__ == "__main__":

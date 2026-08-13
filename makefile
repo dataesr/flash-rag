@@ -10,8 +10,7 @@ build:
 
 push:
 	@echo "Pushing Docker image $(GHCR_IMAGE_NAME):$(CURRENT_VERSION)"
-	docker push $(GHCR_IMAGE_NAME):$(CURRENT_VERSION)
-	docker push $(GHCR_IMAGE_NAME):latest
+	docker push -a $(GHCR_IMAGE_NAME)
 	@echo "Docker image $(GHCR_IMAGE_NAME):$(CURRENT_VERSION) pushed successfully"
 
 run:

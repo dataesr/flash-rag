@@ -73,7 +73,7 @@ def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: 
             }
         )
 
-    answer = "AI answer is not implemented yet!..."
+    answer = "AI answer is not implemented yet..."
 
     return answer, sources
 

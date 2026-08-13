@@ -15,7 +15,7 @@ def publication_get_pages(code: str):
     dir_path = f"{OUTPUT_DIR}/{code}"
     if not os.path.exists(dir_path):
         # Check if zip file exists
-        zip_path = f"{dir_path}.zip"
+        zip_path = f"{code}.zip"
         if not os.path.exists(zip_path):
             print(f"[error] {zip_path} does not exist")
             return
@@ -77,7 +77,7 @@ def get_pages() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def load(use_cache: bool = True):
+def load(use_cache: bool = True, force_download: bool = False):
 
     if use_cache and os.path.exists(OUTPUT_PAGES):
         print(f"[load-eesr] Pages already loaded in {OUTPUT_PAGES}, skipping")

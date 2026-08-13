@@ -26,6 +26,7 @@ class UpdateRequest(BaseModel):
     task: Literal["all", "load", "extract", "transform", "populate"] = "all"
     source: Literal["all", "ssmesr", "eesr"] = "all"
     use_cache: bool = True
+    force_download: bool = False
     db_override: bool = False
     db_reset: bool = False
 
@@ -43,7 +44,7 @@ def update(payload: UpdateRequest):
                 print(f"\n{'='*60}")
                 print(f"=== Loading {source.upper()} documents ===")
                 print(f"{'='*60}")
-                load_fnc(use_cache=payload.use_cache)
+                load_fnc(use_cache=payload.use_cache, force_download=payload.force_download)
 
         if payload.task in ["all", "extract"]:
             # extract documents (OCR)
@@ -80,6 +81,7 @@ def update_cli():
     )
     parser.add_argument("--source", choices=["all", "ssmesr", "eesr"], default="all", help="Source to update")
     parser.add_argument("--no-cache", action="store_true", help="Force reprocessing of documents")
+    parser.add_argument("--force-download", action="store_true", help="Force redownload of documents")
     parser.add_argument("--db-override", action="store_true", help="Override existing documents in the database")
     parser.add_argument("--db-reset", action="store_true", help="Reset the database before populating")
     args = parser.parse_args()
@@ -88,6 +90,7 @@ def update_cli():
         task=args.task,
         source=args.source,
         use_cache=not args.no_cache,
+        force_download=args.force_download,
         db_override=args.db_override,
         db_reset=args.db_reset,
     )
