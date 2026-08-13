@@ -1,111 +1,110 @@
 # Flash Notes RAG
 
-Natural-language Q&A over a collection of company flash notes (PDF, XLSX). This project implements a RAG (Retrieval-Augmented Generation) pipeline using ChromaDB, Mistral AI, and FastAPI.
+Natural-language Q&A over a collection of corporate "flash notes" (PDF, XLSX, spreadsheets). Implements a Retrieval-Augmented Generation (RAG) pipeline using ChromaDB for vector storage, a language model backend for generation, and FastAPI for the HTTP API.
 
-## Architecture
+**Goals**
+- Provide fast, accurate answers over a document collection
+- Reproducible ingestion pipeline (fetch → extract → parse → embed → index)
+- Simple HTTP API and lightweight frontend for demos
 
-The project is structured as follows:
+## Repository layout
 
 ```text
 flash-notes-rag/
-├── data/               # Raw and processed document data
-├── db/                 # ChromaDB vector database storage
-├── src/                # Project source code
-│   ├── load.py         # Handles fetching records from Zenodo
-│   ├── extract.py      # Performs OCR and text extraction
-│   ├── parse.py        # Parses documents into a unified format
-│   ├── populate.py     # Embeds and indexes documents in ChromaDB
-│   ├── query.py        # Main retrieval and generation logic
-│   ├── chromadb.py     # ChromaDB client and collection utilities
-│   ├── mistral.py      # Mistral AI model integration
-│   └── utils.py        # Shared utility functions
-├── static/             # Frontend assets (HTML, CSS, JS)
-├── main.py             # FastAPI entry point
-├── makefile            # Build and release orchestration
-├── dockerfile          # Container configuration
-└── pyproject.toml      # Project dependencies and metadata
+├── data/               # Raw and processed document JSON/line-delimited files
+├── db/                 # ChromaDB persisted storage (sqlite + collection dir)
+├── src/                # Python source (ingest, populate, query, utils)
+├── notebooks/          # Exploration and repro notebooks
+├── static/             # Tiny demo frontend (HTML/CSS)
+├── main.py             # FastAPI app entrypoint
+├── pyproject.toml      # Dependencies and metadata
+├── makefile            # Build/release helpers
+└── dockerfile          # Container image definition
 ```
 
-## Getting Started
+## Quickstart
 
-This repository uses [uv](https://docs.astral.sh/uv/) for dependency management and project orchestration.
+Prerequisites: Python 3.10+, `uv` (optional helper used here), and the environment variables required by your model backend and ChromaDB configuration.
 
-### Installation
+1. Install dependencies and sync the workspace (with `uv`):
 
 ```bash
-# Sync dependencies and create a virtual environment
 uv sync
 ```
 
-### Running Locally
+2. Create a local `.env` file with required variables (example):
 
-To start the FastAPI server:
-
-```bash
-uv run fastapi dev main.py
+```
+# .env
+# MODEL_ENDPOINT=...        # model API url or inference server
+# MODEL_API_KEY=...         # model API key if required
+# CHROMA_DIR=./db          # chroma persistence path
+# OTHER_ENV=...
 ```
 
-The application will be accessible at `http://localhost:8000`.
-
-## Scripts and Pipelines
-
-The system is designed as a pipeline that can be controlled via the API or individual scripts in `src/`.
-
-### API Endpoints
-
-- **`POST /query`**: Performs a RAG search.
-  - Payload: `{"question": "What is the ESG score of Company X?", "top_k": 5}`
-- **`POST /update`**: Orchestrates the entire ingestion pipeline.
-  - Options: Skip fetch, skip download, force extract, force parse, reset/override collection.
-
-### Direct Script Usage
-
-You can also run individual parts of the pipeline:
+3. Populate the ChromaDB index (ingest & embed documents):
 
 ```bash
-uv run src/load.py      # Fetch new data
-uv run src/extract.py   # Run OCR/extraction
-uv run src/parse.py     # Clean and format data
-uv run src/populate.py  # Index into ChromaDB
+# option A: using uv
+uv run --env-file .env python -m src.populate
+
+# option B: direct Python
+python -m src.populate
 ```
 
-## Docker Workflow
+The `populate` module supports flags to control each stage (fetch, extract, parse, embed). Run `python -m src.populate --help` for details.
 
-Building and pushing Docker images is managed via the `makefile`.
-
-### Build Image
+4. Run the API server locally:
 
 ```bash
-make build
+uv run --env-file .env fastapi dev main.py
+# or
+python -m main
 ```
-This builds the image tagged with the current version from `pyproject.toml` and `latest`.
 
-### Push to Registry
+The API is available at http://localhost:8000 by default.
+
+## API
+
+- POST `/query` — run a RAG query (retrieve + generate)
+  - Body example: `{"question":"What does the report say about X?","top_k":5}`
+- POST `/update` — run the ingestion/update orchestration (same options as `src.populate`)
+
+Example `curl`:
 
 ```bash
-make push
-```
-Pushes the images to `ghcr.io/dataesr/flash-rag`.
-
-### Combined Build & Push
-
-```bash
-make build-push
+curl -sS -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What are the key findings about Y?","top_k":3}'
 ```
 
-## Release Process
+## Development notes
 
-The project follows a semantic versioning pattern. Releases are automated via the `makefile`.
+- Code lives under `src/`. Key modules:
+  - `src/populate.py` — ingestion and indexing pipeline
+  - `src/query.py` — retrieval + generation orchestration used by the API
+  - `src/chromadb.py` — helper for collection creation and persistence
+  - `src/mistral.py` — model integration (replaceable with any LLM client)
 
-1. **Tag a new version**:
-   ```bash
-   make release VERSION=X.Y.Z
-   ```
-   This updates `pyproject.toml`, commits the change, and creates a git tag.
+- Data and DB:
+  - Raw/processed documents: `data/`
+  - Chroma persistence: `db/`
 
-2. **Push to main**:
-   ```bash
-   git push origin main --tags
-   ```
+- Notebooks: see `notebooks/` for interactive experiments and repros.
 
-Wait for the CI/CD pipeline to pick up the new tag and deploy the image.
+## Docker & CI
+
+- Build locally via `make build` (image tagged from `pyproject.toml` version).
+- Push with `make push` (pushes to configured registry).
+
+## Release
+
+Tag and release using the `make release VERSION=X.Y.Z` helper; it updates `pyproject.toml` and creates a git tag.
+
+## Contributing
+
+Feel free to open issues or PRs. If you change ingestion formats or the embedding model, include a short note in `README.md` describing required env vars and the expected data flow.
+
+## License
+
+See the repository `LICENSE` file for license information.
