@@ -1,32 +1,34 @@
-from typing import Literal
 import argparse
+from typing import Literal, Optional
 from datetime import datetime
 from src.chromadb import get_collection
 
 MAX_TIMESTAMP = datetime((datetime.now().year - 4), 1, 1).timestamp()  # 3 years ago + 1 year buffer
 MIN_CHUNK_LEN = 50  # Minimum chunk length to consider for querying
-MAX_K = 50  # Maximum docs to retrieve
+MAX_K = 50  # Max docs to retrieves
 
-RERANKER = None  # Load once at first use
+_reranker = None
 
 
 def get_reranker():
-    """Load CrossEncoder reranker"""
-    global RERANKER
-    if RERANKER is None:
+    """Lazy-load CrossEncoder model on first use"""
+
+    global _reranker
+    if _reranker is None:
         try:
             from sentence_transformers import CrossEncoder
 
-            RERANKER = CrossEncoder(
-                "cross-encoder/mmarco-mMiniLMv2L12H384",  # https://www.sbert.net/docs/pretrained-models/ce-msmarco.html
+            print("[reranker] Loading CrossEncoder reranker...")
+            _reranker = CrossEncoder(
+                "cross-encoder/mmarco-mMiniLMv2L12H384",
                 max_length=512,
-                device="cpu",  # "cuda" if GPU
+                device="cpu",  # "cuda" for gpu
             )
-            print("[reranker] CrossEncoder loaded successfully")
+            print("[reranker] Reranker loaded successfully")
         except Exception as error:
             print(f"[reranker] Failed to load reranker: {error}. Continuing without reranking.")
-            RERANKER = False  # Flag to not retry
-    return RERANKER if RERANKER is not False else None
+            _reranker = False  # Flag to skip
+    return _reranker if _reranker is not False else None
 
 
 def rerank_sources(query_text: str, sources: list) -> list:
@@ -39,11 +41,11 @@ def rerank_sources(query_text: str, sources: list) -> list:
         return sources
 
     try:
-        # Get pairs and compute CrossEncoder scores
+        # Get reranker scores from pairs
         pairs = [(query_text, source["document"]) for source in sources]
         scores = reranker.predict(pairs, batch_size=32)
 
-        # Update distances with reranker scores (normalized)
+        # Update distances
         for i, source in enumerate(sources):
             source["distance"] = -scores[i]
 
@@ -57,7 +59,28 @@ def rerank_sources(query_text: str, sources: list) -> list:
         return sources
 
 
-def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: int = 5, use_reranker: bool = True):
+def query(
+    query_text: str,
+    source: Literal["all", "eesr", "ssmesr"] = "all",
+    k: int = 5,
+    use_reranker: bool = True,
+    use_hybrid_search: bool = True,
+) -> tuple:
+    """
+    Query the RAG collection with optional hybrid search (dense + BM25) and reranking.
+
+    Args:
+        query_text: The query string
+        source: Which source to query from
+        k: Number of final results to return (1-50)
+        use_reranker: Whether to use CrossEncoder reranking
+        use_hybrid_search: Whether to combine vector + BM25 search (RRF fusion)
+
+    Returns:
+        (answer, sources) tuple
+    """
+    # Validate k
+    k = max(1, min(k, MAX_K))
 
     # Get collection
     collection = get_collection()
@@ -70,24 +93,20 @@ def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: 
         ]
     }
     if source != "all":
-        where_filter["$and"].append({"source": {"$eq": source}})  # ty:ignore[invalid-argument-type]
+        where_filter["$and"].append({"source": {"$eq": source}})  # ty: ignore[invalid-argument-type]
 
-    # Validate k
-    k = max(1, min(k, MAX_K))
-    retrieval_k = min(k * 3, MAX_K) if use_reranker else k  # Retrieve more results if reranking is enabled
+    # Retrieve more results for hybrid search and reranking
+    retrieval_k = min(k * 3, MAX_K) if (use_hybrid_search or use_reranker) else k
 
-    # Query collection
-    results = collection.query(
-        query_texts=[query_text],
-        n_results=retrieval_k,
-        where=where_filter,
-    )
+    # ========== DENSE SEARCH (Vector/Mistral) ==========
+    print(f"[search] Dense search: retrieving top {retrieval_k}")
+    dense_results = collection.query(query_texts=[query_text], n_results=retrieval_k, where=where_filter)
 
-    # Get results
-    ids = results["ids"][0]
-    documents = (results.get("documents") or [[]])[0]
-    metadatas = (results.get("metadatas") or [[]])[0]
-    distances = (results.get("distances") or [[]])[0]
+    ids = dense_results["ids"][0]
+    documents = (dense_results.get("documents") or [[]])[0]
+    metadatas = (dense_results.get("metadatas") or [[]])[0]
+    distances = (dense_results.get("distances") or [[]])[0]
+
     sources = []
     for i in range(len(ids)):
         sources.append(
@@ -98,11 +117,22 @@ def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: 
             }
         )
 
-    # Rerank if enabled and we have sources
+    # ========== HYBRID SEARCH: BM25 Fusion ==========
+    # if use_hybrid_search:
+    #     bm25_index = get_bm25_index()
+    #     if bm25_index:
+    #         print("[search] Running BM25 sparse search")
+    #         sparse_results = bm25_search(query_text, retrieval_k, bm25_index)
+
+    #         # Fuse dense + sparse via RRF
+    #         sources = rrf_fusion(sources, sparse_results, k=60)
+    #         print(f"[search] After RRF fusion: {len(sources)} results")
+
+    # ========== RERANKING ==========
     if use_reranker and sources:
         sources = rerank_sources(query_text, sources)
 
-    # Return sources and answer
+    # Keep only top-k final results
     sources = sources[:k]
     answer = "AI answer is not implemented yet..."
 
