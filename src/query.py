@@ -5,44 +5,60 @@ from src.chromadb import get_collection
 
 MAX_TIMESTAMP = datetime((datetime.now().year - 4), 1, 1).timestamp()  # 3 years ago + 1 year buffer
 MIN_CHUNK_LEN = 50  # Minimum chunk length to consider for querying
+MAX_K = 50  # Maximum docs to retrieve
+
+RERANKER = None  # Load once at first use
 
 
-def sources_to_publications(sources: list):
-    publications = {}
-    for source in sources:
-        publication = {
-            "file_name": source["metadata"].pop("file_name"),
-            "file_format": source["metadata"].pop("file_format"),
-            "doc_type": source["metadata"].pop("doc_type"),
-            "title": source["metadata"].pop("title"),
-            "created": source["metadata"].pop("created"),
-            "modified": source["metadata"].pop("modified"),
-            "publication_date": source["metadata"].pop("publication_date"),
-            "publication_epoch": source["metadata"].pop("publication_epoch"),
-            "keywords": source["metadata"].pop("keywords"),
-        }
-        publication_id = publication["file_name"]
-        if publication_id not in publications:
-            publications[publication_id] = publication
-            publications[publication_id]["sources"] = []
+def get_reranker():
+    """Load CrossEncoder reranker"""
+    global RERANKER
+    if RERANKER is None:
+        try:
+            from sentence_transformers import CrossEncoder
 
-        # Add source chunk
-        publications[publication_id]["sources"].append(source)
-        # Mean distance from chunks
-        publications[publication_id]["distance"] = sum(
-            [s["distance"] for s in publications[publication_id]["sources"]]
-        ) / len(publications[publication_id]["sources"])
-        # Sort sources by page and section
-        publications[publication_id]["sources"] = sorted(
-            publications[publication_id]["sources"],
-            key=lambda x: (x["metadata"]["page_index"], x["metadata"]["section_level"]),
-        )
-
-    # Sort publications by mean distance
-    return sorted(publications.values(), key=lambda x: x["distance"])
+            RERANKER = CrossEncoder(
+                "cross-encoder/mmarco-mMiniLMv2L12H384",  # https://www.sbert.net/docs/pretrained-models/ce-msmarco.html
+                max_length=512,
+                device="cpu",  # "cuda" if GPU
+            )
+            print("[reranker] CrossEncoder loaded successfully")
+        except Exception as error:
+            print(f"[reranker] Failed to load reranker: {error}. Continuing without reranking.")
+            RERANKER = False  # Flag to not retry
+    return RERANKER if RERANKER is not False else None
 
 
-def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: int = 5):
+def rerank_sources(query_text: str, sources: list) -> list:
+    """
+    Rerank sources using CrossEncoder for better relevance ordering.
+    Falls back to original ranking if reranker unavailable.
+    """
+    reranker = get_reranker()
+    if not reranker or not sources:
+        return sources
+
+    try:
+        # Get pairs and compute CrossEncoder scores
+        pairs = [(query_text, source["document"]) for source in sources]
+        scores = reranker.predict(pairs, batch_size=32)
+
+        # Update distances with reranker scores (normalized)
+        for i, source in enumerate(sources):
+            source["distance"] = -scores[i]
+
+        # Resort by distances
+        reranked = sorted(sources, key=lambda x: x["distance"])
+        print(f"[rerank_sources] Reranked {len(sources)} sources")
+        return reranked
+
+    except Exception as error:
+        print(f"[rerank_sources] Reranking failed: {error}. Returning original order.")
+        return sources
+
+
+def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: int = 5, use_reranker: bool = True):
+
     # Get collection
     collection = get_collection()
 
@@ -56,9 +72,18 @@ def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: 
     if source != "all":
         where_filter["$and"].append({"source": {"$eq": source}})  # ty:ignore[invalid-argument-type]
 
-    # Query collection
-    results = collection.query(query_texts=[query_text], n_results=k, where=where_filter)
+    # Validate k
+    k = max(1, min(k, MAX_K))
+    retrieval_k = min(k * 3, MAX_K) if use_reranker else k  # Retrieve more results if reranking is enabled
 
+    # Query collection
+    results = collection.query(
+        query_texts=[query_text],
+        n_results=retrieval_k,
+        where=where_filter,
+    )
+
+    # Get results
     ids = results["ids"][0]
     documents = (results.get("documents") or [[]])[0]
     metadatas = (results.get("metadatas") or [[]])[0]
@@ -73,6 +98,12 @@ def query(query_text: str, source: Literal["all", "eesr", "ssmesr"] = "all", k: 
             }
         )
 
+    # Rerank if enabled and we have sources
+    if use_reranker and sources:
+        sources = rerank_sources(query_text, sources)
+
+    # Return sources and answer
+    sources = sources[:k]
     answer = "AI answer is not implemented yet..."
 
     return answer, sources
@@ -82,9 +113,17 @@ def query_cli():
     parser = argparse.ArgumentParser(description="Query the ChromaDB collection")
     parser.add_argument("--query", type=str, required=True, help="Query text")
     parser.add_argument("--source", choices=["all", "eesr", "ssmesr"], default="all", help="Source to query")
-    parser.add_argument("--k", type=int, default=5, help="Number of results to return")
+    parser.add_argument("--k", type=int, default=5, help=f"Number of results to return (1-{MAX_K})", metavar=f"1-{MAX_K}")
+    parser.add_argument("--no-rerank", action="store_true", help="Disable CrossEncoder reranking")
     args = parser.parse_args()
-    query(args.query, args.k)
+
+    answer, sources = query(args.query, source=args.source, k=args.k, use_reranker=not args.no_rerank)
+
+    print(f"Answer: {answer}")
+    print(f"\nTop {len(sources)} sources:")
+    for i, src in enumerate(sources, 1):
+        print(f"\n{i}. {src['metadata'].get('title', 'N/A')} (distance: {src['distance']:.4f})")
+        print(f"   {src['document'][:200]}...")
 
 
 if __name__ == "__main__":

@@ -12,4 +12,5 @@ dependencies = [
     "ipykernel>=7.2.0",
     "mistralai>=2.2.0",
     "pandas>=3.0.2",
+    "sentence-transformers>=6.0.0",
 ]
