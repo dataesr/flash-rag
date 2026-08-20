@@ -1,9 +1,12 @@
+from chromadb.utils.embedding_functions import ChromaBm25EmbeddingFunction
 from chromadb.api import ClientAPI
 from chromadb import (
     PersistentClient,
     Schema,
     VectorIndexConfig,
     Collection,
+    SparseVectorIndexConfig,
+    K,
 )
 
 # from chromadb.utils.embedding_functions import ChromaBm25EmbeddingFunction
@@ -37,11 +40,13 @@ def build_schema():
             embedding_function=MistralEmbeddingFunction(),
         ),
     )
+    # TODO: Currently not supported in local but should be soon
     # schema.create_index(
     #     key="sparse_embedding",
     #     config=SparseVectorIndexConfig(
     #         source_key=str(K.DOCUMENT),
-    #         embedding_function=ChromaBm25EmbeddingFunction(), # not implemented yet for local dev
+    #         embedding_function=ChromaBm25EmbeddingFunction(),
+    #         bm25=True,
     #     ),
     # )
 

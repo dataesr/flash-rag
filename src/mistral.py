@@ -17,7 +17,7 @@ MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 client = Mistral(api_key=MISTRAL_API_KEY)
 
 
-def batch_documents_for_embedding(input: Documents, max_documents_per_batch: int = MAX_DOCUMENTS_PER_BATCH) -> list[Documents]:
+def batch_mistral_documents(input: Documents, max_documents_per_batch: int = MAX_DOCUMENTS_PER_BATCH) -> list[Documents]:
     """Split a document list into smaller batches to stay under Mistral's request limits."""
     if not input:
         return []
@@ -85,9 +85,9 @@ class MistralEmbeddingFunction(EmbeddingFunction[Documents]):
         if not all(isinstance(item, str) for item in input):
             raise ValueError("Mistral only supports text documents, not images")
 
-        batch_inputs = batch_documents_for_embedding(input)
+        batches = batch_mistral_documents(input)
         embeddings: list[np.ndarray] = []
-        for batch in batch_inputs:
+        for batch in batches:
             output = self.client.embeddings.create(
                 model=self.model,
                 inputs=batch,

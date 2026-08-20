@@ -1,3 +1,4 @@
+from src.bm25 import build_bm25_index
 import argparse
 from typing import Any
 from src.chromadb import get_collection
@@ -7,7 +8,9 @@ from src.pipelines.transform_ssmesr import transform as transform_ssmesr
 MAX_ITEMS_PER_BATCH = 5000
 
 
-def batch_payload_for_collection(ids: list[str], documents: list[str], metadatas: list[dict[str, Any]], max_items_per_batch: int = MAX_ITEMS_PER_BATCH):
+def batch_chroma_payload(
+    ids: list[str], documents: list[str], metadatas: list[dict[str, Any]], max_items_per_batch: int = MAX_ITEMS_PER_BATCH
+):
     """Split collection payloads into smaller batches for ChromaDB."""
     if not ids:
         return []
@@ -21,7 +24,7 @@ def batch_payload_for_collection(ids: list[str], documents: list[str], metadatas
     ]
 
 
-def populate(reset: bool = False, override: bool = False):
+def populate(reset: bool = False, override: bool = False, build_bm25: bool = True):
     collection = get_collection(reset)
 
     print("[populate] Running EESR transform")
@@ -41,7 +44,7 @@ def populate(reset: bool = False, override: bool = False):
     documents = [chunk["document"] for chunk in all_chunks]
     metadatas = [chunk["metadata"] for chunk in all_chunks]
 
-    batches = batch_payload_for_collection(ids, documents, metadatas)
+    batches = batch_chroma_payload(ids, documents, metadatas)
 
     for batch_index, (batch_ids, batch_documents, batch_metadatas) in enumerate(batches, start=1):
         print(
@@ -53,6 +56,9 @@ def populate(reset: bool = False, override: bool = False):
             collection.add(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
 
     print(f"[populate] Indexed {len(all_chunks)} chunks")
+
+    if build_bm25:
+        build_bm25_index()
 
 
 def populate_cli():

@@ -112,13 +112,15 @@
             const section = meta.section_title || "";
             const page = meta.page_index !== undefined ? `Page ${meta.page_index + 1}` : "";
             const date = meta.publication_date || "";
-            const score = source.distance !== undefined ? (1 - source.distance).toFixed(2) : "N/A";
+            const rerankerScore = source.reranker_score !== undefined ? source.reranker_score.toFixed(2) : "N/A"
+            const rrfScore = source.rrf_score !== undefined ? source.rrf_score.toFixed(2) : "N/A"
+            const distance = source.distance !== undefined ? (1 - source.distance).toFixed(2) : "N/A";
 
             const sourceCard = document.createElement("div");
             sourceCard.className = "source-card";
             sourceCard.innerHTML = `
               <div class="source-meta">
-                <span class="source-tag">Relevance: ${score}</span>
+                <span class="source-tag">Relevance: ${distance ?? rrfScore}</span>
                 <span class="source-title">${title}</span>
               </div>
               <div class="source-section">${section}</div>
