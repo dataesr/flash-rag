@@ -34,6 +34,18 @@
       <section class="input-section">
         <textarea id="input" placeholder="Ask a question about your documents..."></textarea>
         <div class="controls">
+          <div class="toggle-group">
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-rerank" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Rerank</span>
+            </label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-hybrid" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Hybrid</span>
+            </label>
+          </div>
           <button id="send-btn" onclick="query()">
             <span id="btn-text">Search</span>
             <div id="loader" class="loader"></div>
@@ -82,6 +94,10 @@
       const btnText = document.getElementById("btn-text");
       const loader = document.getElementById("loader");
 
+      // Read toggle states
+      const useReranker = document.getElementById("toggle-rerank").checked;
+      const useHybrid = document.getElementById("toggle-hybrid").checked;
+
       // Set loading state
       sendBtn.disabled = true;
       btnText.style.display = "none";
@@ -92,7 +108,11 @@
         const res = await fetch("/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: question })
+          body: JSON.stringify({ 
+            query: question,
+            use_reranker: useReranker,
+            use_hybrid_search: useHybrid
+          })
         });
 
         if (!res.ok) throw new Error("Search failed");
