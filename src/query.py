@@ -1,4 +1,5 @@
 import argparse
+from time import perf_counter
 from typing import Literal, Optional
 from chromadb import Knn, Rrf, Search, K
 from datetime import datetime
@@ -58,6 +59,8 @@ def query(
         (answer, sources)
     """
 
+    query_started = perf_counter()
+
     # Validate k
     k = max(1, min(k, MAX_K))
 
@@ -82,7 +85,9 @@ def query(
 
     # ========== DENSE SEARCH (Vector/Mistral) ==========
     print(f"[search] Dense search: retrieving top {retrieval_k}")
+    stage_started = perf_counter()
     dense_results = collection.query(query_texts=[query_text], n_results=retrieval_k, where=where_filter)
+    print(f"[timing] dense search + embedding: {perf_counter() - stage_started:.3f}s")
 
     ids = dense_results["ids"][0]
     documents = (dense_results.get("documents") or [[]])[0]
@@ -103,19 +108,26 @@ def query(
     # ========== HYBRID SEARCH: BM25 Fusion ==========
     if use_hybrid_search:
         print("[search] Running BM25 sparse search")
+        stage_started = perf_counter()
         bm25_sources = bm25_search(query_text, k=retrieval_k)
+        print(f"[timing] BM25 search: {perf_counter() - stage_started:.3f}s")
 
         # Fuse dense + sparse via RRF
+        stage_started = perf_counter()
         sources = rrf_fusion(sources, bm25_sources)
         print(f"[search] After RRF fusion: {len(sources)} results")
+        print(f"[timing] RRF fusion: {perf_counter() - stage_started:.3f}s")
 
     # ========== RERANKING ==========
     if use_reranker and sources:
+        stage_started = perf_counter()
         sources = lightweight_rerank(query_text, sources)
+        print(f"[timing] reranking: {perf_counter() - stage_started:.3f}s")
 
     # Keep only top-k final results
     sources = sources[:k]
     answer = "AI answer is not implemented yet..."
+    print(f"[timing] total query: {perf_counter() - query_started:.3f}s")
 
     return answer, sources
 
