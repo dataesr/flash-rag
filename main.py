@@ -26,7 +26,7 @@ async def query(payload: QueryRequest):
         payload.use_reranker,
         payload.use_hybrid_search
     )
-    return {"query": query, "answer": answer, "sources": sources}
+    return {"query": payload.query, "answer": answer, "sources": sources}
 
 
 @app.post("/update")

@@ -13,9 +13,9 @@ K_MULTIPLIER = 5  # Multiplier for candidate retrieval before RRF and reranking
 
 def lightweight_rerank(query_text: str, sources: list) -> list:
     """
-    Combine dense + sparse signals without ML models.
-    Zero dependencies, microsecond latency.
+    Combine dense + sparse signals
     """
+
     query_terms = set(query_text.lower().split())
 
     for source in sources:
@@ -51,7 +51,7 @@ def query(
         query_text: The query string
         source: Which source to query from
         k: Number of final results to return (1-50)
-        use_reranker: Whether to use CrossEncoder reranking
+        use_reranker: Whether to use reranking
         use_hybrid_search: Whether to combine vector + BM25 search (RRF fusion)
 
     Returns:
@@ -89,9 +89,9 @@ def query(
     metadatas = (dense_results.get("metadatas") or [[]])[0]
     distances = (dense_results.get("distances") or [[]])[0]
 
-    dense_sources = []
+    sources = []
     for i in range(len(ids)):
-        dense_sources.append(
+        sources.append(
             {
                 "id": ids[i],
                 "distance": distances[i],
@@ -106,7 +106,7 @@ def query(
         bm25_sources = bm25_search(query_text, k=retrieval_k)
 
         # Fuse dense + sparse via RRF
-        sources = rrf_fusion(dense_sources, bm25_sources)
+        sources = rrf_fusion(sources, bm25_sources)
         print(f"[search] After RRF fusion: {len(sources)} results")
 
     # ========== RERANKING ==========
@@ -125,7 +125,7 @@ def query_cli():
     parser.add_argument("--query", type=str, required=True, help="Query text")
     parser.add_argument("--source", choices=["all", "eesr", "ssmesr"], default="all", help="Source to query")
     parser.add_argument("--k", type=int, default=5, help=f"Number of results to return (1-{MAX_K})", metavar=f"1-{MAX_K}")
-    parser.add_argument("--no-rerank", action="store_true", help="Disable CrossEncoder reranking")
+    parser.add_argument("--no-rerank", action="store_true", help="Disable reranking")
     parser.add_argument("--no-hybrid", action="store_true", help="Disable hybrid search")
     args = parser.parse_args()
 
