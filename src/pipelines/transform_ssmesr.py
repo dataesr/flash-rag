@@ -10,6 +10,36 @@ OUTPUT_CHUNKS = f"{OUTPUT_DIR}/ssmesr_chunks.jsonl"
 CHUNK_MAX_CHARS = 8000
 
 
+def parse_table(table: dict) -> tuple[str, str, str]:
+    """
+    Parse SSMESR table
+
+    Returns: (markdown, csv, headers_text)
+    """
+    headers = table.get("headers", [])
+    data = table.get("data", [])
+
+    if not headers or not data:
+        return "", "", ""
+
+    # Markdown format
+    md = "| " + " | ".join(str(h) for h in headers) + " |\n"
+    md += "|" + "|".join(["---"] * len(headers)) + "|\n"
+    for row in data:
+        md += "| " + " | ".join(str(cell) for cell in row) + " |\n"
+
+    # CSV format
+    lines = [",".join(str(h) for h in headers)]
+    for row in data:
+        lines.append(",".join(str(cell) for cell in row))
+    csv = "\n".join(lines)
+
+    # Extract column names for better BM25 matching
+    headers_text = " | ".join(str(h) for h in headers)
+
+    return md, csv, headers_text
+
+
 def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
     file_id = document_metadata["file_id"]
 
@@ -36,43 +66,79 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
             title = section.get("title", "")
             level = section.get("level", 0)
             paragraphs = section.get("paragraphs", [])
-            # tables = section.get("tables", []) #TODO: implement table parsing
+            tables = section.get("tables", [])
 
-            if not paragraphs:
-                # print(f"[transform_ssmesr] {file_name}: No paragraphs found in section {section_index} of page {page_index}")
-                continue
+            # ========== PARAGRAPHS ==========
+            if paragraphs:
+                current_doc = ""
+                current_chunks = []
+                for para in paragraphs:
+                    # Skip table captions and image references
+                    if para.startswith("TABLEAU") or para.startswith("![") or para.startswith("GRAPHIQUE"):
+                        continue
 
-            current_doc = ""
-            current_chunks = []
-            for para in paragraphs:
-                next_doc = current_doc + "\n\n" + para if current_doc else para
-                if len(next_doc) <= CHUNK_MAX_CHARS:
-                    current_doc = next_doc
-                else:
+                    next_doc = current_doc + "\n\n" + para if current_doc else para
+                    if len(next_doc) <= CHUNK_MAX_CHARS:
+                        current_doc = next_doc
+                    else:
+                        current_chunks.append(current_doc)
+                        current_doc = para
+
+                if current_doc:
                     current_chunks.append(current_doc)
-                    current_doc = para
-            current_chunks.append(current_doc)
 
-            if len(current_chunks) > 1:
-                print(
-                    f"[transform_ssmesr] {file_id}: Section={section_index}, page={page_index} --> {len(current_chunks)} chunks"
-                )
+                # if len(current_chunks) > 1:
+                #     print(
+                #         f"[transform_ssmesr] {file_id}: page={section_index}, section={page_index} --> {len(current_chunks)} paragraph chunks"
+                #     )
 
-            for chunk_index, chunk in enumerate(current_chunks):
-                chunks.append(
-                    {
-                        "id": f"ssmesr_{file_id}_p{page_index}_s{section_index}_{chunk_index}",
-                        "document": chunk,
-                        "metadata": {
-                            **document_metadata,
-                            "page_index": page_index,
-                            "section_title": title[:200],
-                            "section_level": level,
-                            "chunk_type": "paragraph",
-                            "chunk_len": len(chunk),
-                        },
-                    }
-                )
+                for chunk_index, chunk in enumerate(current_chunks):
+                    chunks.append(
+                        {
+                            "id": f"ssmesr_{file_id}_p{page_index}_s{section_index}_p{chunk_index}",
+                            "document": chunk,
+                            "metadata": {
+                                **document_metadata,
+                                "page_index": page_index,
+                                "section_title": title[:200],
+                                "section_level": level,
+                                "chunk_type": "paragraph",
+                                "chunk_len": len(chunk),
+                            },
+                        }
+                    )
+
+            # ========== TABLES ==========
+            if tables:
+                # print(f"[transform_ssmesr] {file_id}: page={section_index}, section={page_index} --> {len(tables)} table(s)")
+
+                for table_index, table in enumerate(tables):
+                    # Convert table to searchable markdown
+                    markdown_table, csv_table, headers_text = parse_table(table)
+
+                    if not markdown_table:
+                        continue
+
+                    chunks.append(
+                        {
+                            "id": f"ssmesr_{file_id}_p{page_index}_s{section_index}_t{table_index}",
+                            "document": markdown_table,
+                            "metadata": {
+                                **document_metadata,
+                                "page_index": page_index,
+                                "section_title": title[:200],
+                                "section_level": level,
+                                "chunk_type": "table",
+                                "table_index": table_index,
+                                # "table_rows": len(table.get("data", [])),
+                                # "table_cols": len(headers),
+                                "table_headers": headers_text[:500],  # For BM25 keyword matching
+                                "table_csv": csv_table,  # Raw data for post-retrieval processing
+                                "chunk_len": len(markdown_table),
+                            },
+                        }
+                    )
+
     return chunks
 
 
@@ -122,12 +188,15 @@ def transform(use_cache: bool = True) -> list[dict]:
         chunks.extend(chunk_document(file["ocr_path"], metadata))
 
     print(f"[transform_ssmesr] Generated {len(chunks)} SSMESR chunks")
+    print(f"  - Paragraphs: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'paragraph')}")
+    print(f"  - Tables: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'table')}")
+
     save_jsonl(chunks, OUTPUT_CHUNKS)
     return chunks
 
 
 def transform_cli():
-    parser = argparse.ArgumentParser(description="Transform SSMESR OCR results into chunked documents")
+    parser = argparse.ArgumentParser(description="Transform SSMESR OCR results into chunked documents (paragraphs + tables)")
     parser.add_argument("--no-cache", action="store_true", help="Force reload of chunks")
     args = parser.parse_args()
     transform(use_cache=not args.no_cache)
