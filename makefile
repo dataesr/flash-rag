@@ -30,6 +30,7 @@ ifndef VERSION
 	$(error VERSION is not defined. Use 'make release VERSION=x.y.z')
 endif
 	sed -i 's/^version = ".*"/version = "${VERSION}"/' pyproject.toml
+	uv lock
 	git commit -am '[release] version ${VERSION}'
 	git tag v${VERSION}
 	@echo "If everything is OK, you can push with tags i.e. git push origin main --tags"
