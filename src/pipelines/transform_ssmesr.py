@@ -114,10 +114,15 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                 # print(f"[transform_ssmesr] {file_id}: page={section_index}, section={page_index} --> {len(tables)} table(s)")
 
                 for table_index, table in enumerate(tables):
+                    if not isinstance(table, dict):
+                        print(f"[warn] Empty table found for document {file_name} ({ocr_path})")
+                        continue
+
                     # Convert table to searchable markdown
                     markdown_table, csv_table, headers_text = parse_table(table)
 
                     if not markdown_table:
+                        print(f"[warn] No markdown table for document {file_name} ({ocr_path})")
                         continue
 
                     chunks.append(
