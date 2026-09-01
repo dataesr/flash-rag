@@ -26,6 +26,7 @@ def batch_chroma_payload(
 
 def populate(
     source: Literal["all", "ssmesr", "eesr"] = "all",
+    use_cache: bool = True,
     reset: bool = False,
     override: bool = False,
     build_bm25: bool = True,
@@ -35,14 +36,14 @@ def populate(
 
     if source in ["all", "ssmesr"]:
         print("[populate] Running SSMESR transform")
-        ssmesr_chunks = transform_ssmesr()
+        ssmesr_chunks = transform_ssmesr(use_cache)
         print(f"[populate] SSMESR chunks: {len(ssmesr_chunks)}")
         if len(ssmesr_chunks):
             all_chunks += ssmesr_chunks
 
     if source in ["all", "eesr"]:
         print("[populate] Running EESR transform")
-        eesr_chunks = transform_eesr()
+        eesr_chunks = transform_eesr(use_cache)
         print(f"[populate] EESR chunks: {len(eesr_chunks)}")
         if len(eesr_chunks):
             all_chunks += eesr_chunks

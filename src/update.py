@@ -54,7 +54,7 @@ def update(payload: UpdateRequest):
                 print(f"{'='*60}")
                 extract_fnc(use_cache=payload.use_cache)
 
-        if payload.task in ["all", "transform"]:
+        if payload.task in ["transform"]:
             # transform documents (chunking)
             if transform_fnc:
                 print(f"\n{'='*60}")
@@ -67,7 +67,12 @@ def update(payload: UpdateRequest):
         print(f"\n{'='*60}")
         print("=== Populating collection ===")
         print(f"{'='*60}")
-        populate(source=payload.source, reset=payload.db_reset, override=payload.db_override)
+        populate(
+            source=payload.source,
+            use_cache=payload.use_cache,
+            reset=payload.db_reset,
+            override=payload.db_override,
+        )
 
     print(f"\n{'='*60}")
     print("=== Update Complete ===")
