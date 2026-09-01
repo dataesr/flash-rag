@@ -28,7 +28,7 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
 
         print(f"[load-ssmesr] Fetching page {page}: {url}")
         try:
-            data = fetch_data(url)
+            data = fetch_data(url, timeout=120)
             request_count += 1
 
             hits = data.get("hits", {}).get("hits", [])
@@ -49,9 +49,9 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
                 raise
 
     df = pd.DataFrame(all_records)
-    df[["created", "modified"]] = df[["created", "modified"]].apply(
-        pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce"
-    )
+    # df[["created", "modified"]] = df[["created", "modified"]].apply(
+    #     pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce"
+    # )
     return df
 
 
@@ -75,8 +75,8 @@ def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
         return existing
 
     all = pd.concat([existing, new])
-    all["modified"] = all["modified"].apply(pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce")
-    merged = all.sort_values("modified").drop_duplicates(subset="id", keep="last").reset_index(drop=True)
+    # all["modified"] = all["modified"].apply(pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce")
+    merged = all.sort_values("modified").drop_duplicates(subset=["id", "title"], keep="last").reset_index(drop=True)
 
     print(f"[load-ssmesr] Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(new)})")
     return merged
@@ -118,6 +118,10 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
 
         # Merge files
         files = pd.concat([exploded[["id", "created", "modified"]], files_data, metadata_data, types_data], axis=1)
+
+        # Drop duplicates
+        files = files.drop_duplicates(subset=["file_name", "title"], keep="last").reset_index(drop=True)
+
     except Exception as error:
         print(f"[error] Error while exploding files: {error}")
         raise error

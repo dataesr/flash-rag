@@ -41,7 +41,8 @@ def parse_table(table: dict) -> tuple[str, str, str]:
 
 
 def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
-    file_id = document_metadata["file_id"]
+    file_name = document_metadata["file_name"]
+    file_name_no_ext = file_name.split(".")[0] if "." in file_name else file_name
 
     try:
         with open(ocr_path, "r", encoding="utf-8") as f:
@@ -89,13 +90,13 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
                 # if len(current_chunks) > 1:
                 #     print(
-                #         f"[transform_ssmesr] {file_id}: page={section_index}, section={page_index} --> {len(current_chunks)} paragraph chunks"
+                #         f"[transform_ssmesr] {file_name}: page={section_index}, section={page_index} --> {len(current_chunks)} paragraph chunks"
                 #     )
 
                 for chunk_index, chunk in enumerate(current_chunks):
                     chunks.append(
                         {
-                            "id": f"ssmesr_{file_id}_p{page_index}_s{section_index}_p{chunk_index}",
+                            "id": f"ssmesr_{file_name_no_ext}_p{page_index}_s{section_index}_p{chunk_index}",
                             "document": chunk,
                             "metadata": {
                                 **document_metadata,
@@ -121,7 +122,7 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
                     chunks.append(
                         {
-                            "id": f"ssmesr_{file_id}_p{page_index}_s{section_index}_t{table_index}",
+                            "id": f"ssmesr_{file_name_no_ext}_p{page_index}_s{section_index}_t{table_index}",
                             "document": markdown_table,
                             "metadata": {
                                 **document_metadata,
@@ -146,15 +147,15 @@ def build_document_metadata(file: pd.Series) -> dict:
     return {
         "source": "ssmesr",
         "record_id": file["id"],
-        "file_id": file.get("file_id", ""),
-        "file_name": file.get("file_name", ""),
-        "file_format": file.get("file_format", ""),
-        "doc_type": file.get("subtype", ""),
-        "publication_date": str(file.get("publication_date", "")),
-        "publication_epoch": to_unix_epoch(str(file.get("publication_date", ""))) if file.get("publication_date") else 0,
-        "created": str(file.get("created", "")),
-        "modified": str(file.get("modified", "")),
-        "title": file.get("title", ""),
+        "file_id": file["file_id"],
+        "file_name": file["file_name"],
+        "file_format": file["file_format"],
+        "doc_type": file["subtype"],
+        "publication_date": str(file["publication_date"]),
+        "publication_epoch": to_unix_epoch(str(file["publication_date"])) if file["publication_date"] else 0,
+        # "created": str(file.get("created", "")),
+        # "modified": str(file.get("modified", "")),
+        "title": file["title"],
         "keywords": (
             ", ".join(file.get("keywords", [])) if isinstance(file.get("keywords"), list) else str(file.get("keywords", ""))
         ),

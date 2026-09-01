@@ -32,7 +32,7 @@ class UpdateRequest(BaseModel):
 
 
 def update(payload: UpdateRequest):
-    sources = payload.source if payload.source != "all" else SOURCES
+    sources = [payload.source] if payload.source != "all" else SOURCES
     for source in sources:
         load_fnc = LOAD_FNC.get(source)
         extract_fnc = EXTRACT_FNC.get(source)
@@ -67,7 +67,7 @@ def update(payload: UpdateRequest):
         print(f"\n{'='*60}")
         print("=== Populating collection ===")
         print(f"{'='*60}")
-        populate(reset=payload.db_reset, override=payload.db_override)
+        populate(source=payload.source, reset=payload.db_reset, override=payload.db_override)
 
     print(f"\n{'='*60}")
     print("=== Update Complete ===")

@@ -49,14 +49,9 @@ def publication_get_pages(code: str):
                     print(f"[error] Expected a dict in {file_path}, got {type(page_data)}")
                     continue
 
-                # page_courant_id = page_data.get("PAGE_COURANTE_ID", 0)
-                # if page_courant_id <= 1:
-                #     # Skip pages with PAGE_COURANTE_ID <= 1 (annexes or resumes)
-                #     skipped_pages += 1
-                #     continue
                 page_data["PAGE_FILE_NAME"] = file_name  # Add the file name to the page data for reference
-
                 data.append(page_data)
+
             except Exception as error:
                 print(f"[error] Failed to load JSON from {file_path}: {error}")
 

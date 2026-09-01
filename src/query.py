@@ -1,3 +1,4 @@
+from src.utils import parse_key_value_pair
 import argparse
 from time import perf_counter
 from typing import Literal, Optional
@@ -44,6 +45,7 @@ def query(
     k: int = 5,
     use_reranker: bool = True,
     use_hybrid_search: bool = True,
+    filters: dict = {},
 ) -> tuple:
     """
     Query the RAG collection with optional hybrid search (dense + BM25) and reranking.
@@ -51,6 +53,7 @@ def query(
     Args:
         query_text: The query string
         source: Which source to query from
+        filters: Additionnal filters
         k: Number of final results to return (1-50)
         use_reranker: Whether to use reranking
         use_hybrid_search: Whether to combine vector + BM25 search (RRF fusion)
@@ -74,6 +77,10 @@ def query(
             {"chunk_len": {"$gte": MIN_CHUNK_LEN}},
         ]
     }
+
+    if filters.get("chunk_type"):
+        where_filter["$and"].append({"chunk_type": {"$eq": filters["chunk_type"]}})
+
     if source != "all":
         where_filter["$and"].append({"source": {"$eq": source}})  # ty: ignore[invalid-argument-type]
 
@@ -139,6 +146,13 @@ def query_cli():
     parser.add_argument("--k", type=int, default=5, help=f"Number of results to return (1-{MAX_K})", metavar=f"1-{MAX_K}")
     parser.add_argument("--no-rerank", action="store_true", help="Disable reranking")
     parser.add_argument("--no-hybrid", action="store_true", help="Disable hybrid search")
+    parser.add_argument(
+        "-f",
+        "--filter",
+        action="append",
+        type=parse_key_value_pair,
+        help="Filters in format: key=value (can be used multiple times)",
+    )
     args = parser.parse_args()
 
     answer, sources = query(
@@ -147,6 +161,7 @@ def query_cli():
         k=args.k,
         use_reranker=not args.no_rerank,
         use_hybrid_search=not args.no_hybrid,
+        filters=dict(args.filter) if args.filter else {},
     )
 
     print(f"Answer: {answer}")

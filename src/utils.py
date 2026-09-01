@@ -1,6 +1,7 @@
 import os
 import json
 import httpx
+import argparse
 from datetime import datetime
 
 
@@ -39,11 +40,11 @@ def load_jsonl(input_path: str) -> list[dict] | dict | None:
         return None
 
 
-def fetch_data(url: str) -> dict:
+def fetch_data(url: str, timeout: int = 60) -> dict:
     """Fetch a URL and return the JSON response."""
     with httpx.Client() as client:
         try:
-            response = client.get(url, timeout=30)
+            response = client.get(url, timeout=timeout)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as error:
@@ -73,3 +74,11 @@ def to_unix_epoch(date_str: str) -> int:
     except Exception as error:
         print(f"[error] Failed to convert date string to Unix epoch: {error}")
         raise error
+
+
+def parse_key_value_pair(arg):
+    """Parse a single key=value pair."""
+    if "=" not in arg:
+        raise argparse.ArgumentTypeError(f"Invalid format '{arg}'. Expected key=value")
+    key, value = arg.split("=", 1)
+    return (key.strip(), value.strip())

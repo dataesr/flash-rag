@@ -60,7 +60,7 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": "eesr",
         "page_id": page_id,
-        "file_name": page.get("PAGE_FILE_NAME", ""),
+        "file_name": page["PAGE_FILE_NAME"],
         "file_format": "json",
         "doc_type": page.get("PAGE_TYPE_NOM", page.get("PAGE_TYPE_ID", "page")),
         "title": page.get("PAGE_TITRE_FR") or page.get("PAGE_TITRE_EN") or "",
@@ -83,9 +83,13 @@ def build_page_text(page: dict[str, Any]) -> str:
         value = page.get(field)
         if isinstance(value, str) and value.strip():
             parts.append(value.strip())
+        else:
+            if field == "PAGE_TEXTE_FR":
+                print(f"[warn] No PAGE_TEXTE_FR found for page {page['PAGE_NOM_DE_CODE']} ({page.get('PAGE_TITRE_FR')})")
+                return ""  # Skip pages without main text
 
     if not parts:
-        print(f"[error] No content found for page {page['PAGE_ID']}")
+        print(f"[error] No content found for page {page['PAGE_NOM_DE_CODE']}")
         return ""
 
     return "\n\n".join(parts)
@@ -155,7 +159,7 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
             continue
 
         # Create document with context for BM25
-        doc_parts = [f"Illustration: {title}", f"Type: {sous_type}", f"Colonnes: {headers_text}", "", markdown_table]
+        doc_parts = [f"{sous_type}: {title}", f"Colonnes: {headers_text}", "", markdown_table]
         document = "\n".join(doc_parts)
 
         chunks.append(

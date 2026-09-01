@@ -14,17 +14,19 @@ class QueryRequest(BaseModel):
     top_k: int = 5
     use_reranker: bool = True
     use_hybrid_search: bool = True
+    filters: dict[str, str] = {}
 
 
 @app.post("/query")
 async def query(payload: QueryRequest):
     print(f"[query] Received query request: {payload}")
     answer, sources = run_query(
-        payload.query, 
-        payload.source, 
+        payload.query,
+        payload.source,
         payload.top_k,
         payload.use_reranker,
-        payload.use_hybrid_search
+        payload.use_hybrid_search,
+        payload.filters,
     )
     return {"query": payload.query, "answer": answer, "sources": sources}
 

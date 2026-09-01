@@ -1,6 +1,6 @@
 from src.bm25 import build_bm25_index
 import argparse
-from typing import Any
+from typing import Any, Literal
 from src.chromadb import get_collection
 from src.pipelines.transform_eesr import transform as transform_eesr
 from src.pipelines.transform_ssmesr import transform as transform_ssmesr
@@ -24,18 +24,29 @@ def batch_chroma_payload(
     ]
 
 
-def populate(reset: bool = False, override: bool = False, build_bm25: bool = True):
+def populate(
+    source: Literal["all", "ssmesr", "eesr"] = "all",
+    reset: bool = False,
+    override: bool = False,
+    build_bm25: bool = True,
+):
     collection = get_collection(reset)
+    all_chunks = []
 
-    print("[populate] Running EESR transform")
-    eesr_chunks = transform_eesr()
-    print(f"[populate] EESR chunks: {len(eesr_chunks)}")
+    if source in ["all", "ssmesr"]:
+        print("[populate] Running SSMESR transform")
+        ssmesr_chunks = transform_ssmesr()
+        print(f"[populate] SSMESR chunks: {len(ssmesr_chunks)}")
+        if len(ssmesr_chunks):
+            all_chunks += ssmesr_chunks
 
-    print("[populate] Running SSMESR transform")
-    ssmesr_chunks = transform_ssmesr()
-    print(f"[populate] SSMESR chunks: {len(ssmesr_chunks)}")
+    if source in ["all", "eesr"]:
+        print("[populate] Running EESR transform")
+        eesr_chunks = transform_eesr()
+        print(f"[populate] EESR chunks: {len(eesr_chunks)}")
+        if len(eesr_chunks):
+            all_chunks += eesr_chunks
 
-    all_chunks = eesr_chunks + ssmesr_chunks
     if not all_chunks:
         print("[populate] No chunks to ingest")
         return
@@ -47,9 +58,9 @@ def populate(reset: bool = False, override: bool = False, build_bm25: bool = Tru
     batches = batch_chroma_payload(ids, documents, metadatas)
 
     for batch_index, (batch_ids, batch_documents, batch_metadatas) in enumerate(batches, start=1):
-        print(
-            f"[populate] Writing batch {batch_index}/{len(batches)} ({len(batch_ids)} chunks) into collection '{collection.name}'"
-        )
+        print(f"[populate] Writing batch {batch_index}/{len(batches)} ({len(batch_ids)} chunks) \
+            into collection '{collection.name}'")
+
         if override:
             collection.upsert(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
         else:
