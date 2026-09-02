@@ -3,7 +3,7 @@
 import os
 import re
 import pickle
-import numpy as np
+from typing import Any
 from rank_bm25 import BM25Okapi
 from src.chromadb import get_collection
 
@@ -11,6 +11,15 @@ BM25_DIR = "./data/bm25"
 BM25_PATH = f"{BM25_DIR}/index.pkl"
 
 _bm25_index = None
+
+
+def build_search_text(document: str, metadata: dict[str, Any] | None = None) -> str:
+    """Create a BM25 search text that includes the main chunk content and some metadata signals."""
+    metadata = metadata or {}
+    title = str(metadata.get("title") or "")
+    publication_date = str(metadata.get("publication_date") or "")
+    parts = [title, document or "", publication_date]
+    return " ".join(str(part).strip() for part in parts if str(part).strip())
 
 
 def get_bm25_index():
@@ -60,20 +69,24 @@ def build_bm25_index() -> bool:
 
     collection = get_collection()
 
-    # Retrieve the complete corpus.
-    # Chroma's get() returns documents and IDs
-    results = collection.get(include=["documents"])
+    # Retrieve the complete corpus
+    results = collection.get(include=["documents", "metadatas"])
     ids = results["ids"] or []
     documents = results["documents"] or []
+    metadatas = results["metadatas"] or []
 
     print(f"[bm25] Indexing {len(documents)} documents")
 
-    tokenized_documents = [tokenize(document) for document in documents]
+    enriched_documents = [
+        build_search_text(document, metadata)  # ty: ignore[invalid-argument-type]
+        for document, metadata in zip(documents, metadatas)
+    ]
+    tokenized_documents = [tokenize(document) for document in enriched_documents]
     bm25 = BM25Okapi(tokenized_documents)
     index = {
         "bm25": bm25,
         "ids": ids,
-        "documents": documents,
+        "documents": enriched_documents,
         "tokenized_documents": tokenized_documents,
     }
 
@@ -89,10 +102,7 @@ def build_bm25_index() -> bool:
     return True
 
 
-def bm25_search(
-    query: str,
-    k: int = 20,
-) -> list[dict]:
+def bm25_search(query: str, k: int = 20) -> list[dict]:
     """
     Search the BM25 index.
 

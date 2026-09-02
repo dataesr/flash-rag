@@ -12,8 +12,8 @@ class QueryRequest(BaseModel):
     query: str
     source: Literal["all", "eesr", "ssmesr"] = "all"
     top_k: int = 5
-    use_reranker: bool = True
-    use_hybrid_search: bool = True
+    use_reranker: bool = False
+    use_hybrid_search: bool = False
     filters: dict[str, str] = {}
 
 

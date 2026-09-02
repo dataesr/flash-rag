@@ -1,9 +1,9 @@
-from src.utils import parse_key_value_pair
+import re
 import argparse
 from time import perf_counter
-from typing import Literal, Optional
-from chromadb import Knn, Rrf, Search, K
+from typing import Literal
 from datetime import datetime
+from src.utils import parse_key_value_pair
 from src.chromadb import get_collection
 from src.bm25 import bm25_search, rrf_fusion
 
@@ -13,28 +13,40 @@ MAX_K = 50  # Max docs to retrieves
 K_MULTIPLIER = 5  # Multiplier for candidate retrieval before RRF and reranking
 
 
-def lightweight_rerank(query_text: str, sources: list) -> list:
+def lightweight_rerank(query: str, sources: list[dict]) -> list[dict]:
     """
-    Combine dense + sparse signals
+    Rerank ChromaDB results by combining:
+    1. Semantic score (from ChromaDB)
+    2. Title relevance (keyword overlap)
+    3. Temporal proximity (year matching/recency bias)
     """
 
-    query_terms = set(query_text.lower().split())
+    # Parse query
+    query_lower = query.lower().strip()
 
     for source in sources:
-        text_lower = source["document"].lower()
+        semantic_score = source["distance"]
 
-        # Signal 1: How many query terms exact match?
-        term_match = len([t for t in query_terms if t in text_lower]) / len(query_terms)
+        # Title relevance: how much query keywords overlap with title
+        title_words = set(source["metadata"]["title"].lower().split())
+        query_words = set(query_lower.split())
+        title_score = len(title_words & query_words) / (len(title_words | query_words) + 1e-6)
 
-        # Signal 2: Is query phrase found contiguously?
-        exact_phrase = 1.0 if query_text.lower() in text_lower else 0.0
+        # Temporal: does doc year match query years?
+        query_years = set(re.findall(r"\b(20\d{2})\b", query_lower))
+        publication_date = source["metadata"]["publication_date"]
+        publication_year = publication_date[:4]
+        publication_month = publication_date[5:7]
+        temporal_score = 0.0
+        if query_years:
+            if publication_year in query_years:
+                temporal_score = 1.0  # Exact match
+                # Prefer later-in-year dates for a target year when the query is year-only.
+                temporal_score += 0.5 * (int(publication_month) / 12.0)  # Normalize month to [0,1]
 
-        # Signal 3: Chunk length penalty (shorter = less fluff)
-        length_penalty = min(1.0, 300 / len(text_lower))
-
-        # Combine signals
-        rerank_score = (term_match * 0.5) + (exact_phrase * 0.35) + (length_penalty * 0.15)
-        source["rerank_score"] = rerank_score
+        # Combine with weights
+        final_score = 0.5 * semantic_score + 0.25 * title_score + 0.25 * temporal_score
+        source["rerank_score"] = final_score
 
     return sorted(sources, key=lambda x: x["rerank_score"], reverse=True)
 
@@ -43,8 +55,8 @@ def query(
     query_text: str,
     source: Literal["all", "eesr", "ssmesr"] = "all",
     k: int = 5,
-    use_reranker: bool = True,
-    use_hybrid_search: bool = True,
+    use_reranker: bool = False,
+    use_hybrid_search: bool = False,
     filters: dict = {},
 ) -> tuple:
     """
@@ -144,8 +156,8 @@ def query_cli():
     parser.add_argument("--query", type=str, required=True, help="Query text")
     parser.add_argument("--source", choices=["all", "eesr", "ssmesr"], default="all", help="Source to query")
     parser.add_argument("--k", type=int, default=5, help=f"Number of results to return (1-{MAX_K})", metavar=f"1-{MAX_K}")
-    parser.add_argument("--no-rerank", action="store_true", help="Disable reranking")
-    parser.add_argument("--no-hybrid", action="store_true", help="Disable hybrid search")
+    parser.add_argument("--use-rerank", action="store_true", help="Enable reranking")
+    parser.add_argument("--use-hybrid", action="store_true", help="Enable hybrid search")
     parser.add_argument(
         "-f",
         "--filter",
@@ -159,8 +171,8 @@ def query_cli():
         args.query,
         source=args.source,
         k=args.k,
-        use_reranker=not args.no_rerank,
-        use_hybrid_search=not args.no_hybrid,
+        use_reranker=args.use_rerank,
+        use_hybrid_search=args.use_hybrid,
         filters=dict(args.filter) if args.filter else {},
     )
 
