@@ -14,6 +14,7 @@ class QueryRequest(BaseModel):
     top_k: int = 5
     use_reranker: bool = False
     use_hybrid_search: bool = False
+    use_mistral: bool = False
     filters: dict[str, str] = {}
 
 
@@ -26,6 +27,7 @@ async def query(payload: QueryRequest):
         payload.top_k,
         payload.use_reranker,
         payload.use_hybrid_search,
+        payload.use_mistral,
         payload.filters,
     )
     return {"query": payload.query, "answer": answer, "sources": sources}

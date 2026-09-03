@@ -1,3 +1,4 @@
+from src.mistral import mistral_rag_answer
 import re
 import argparse
 from time import perf_counter
@@ -13,7 +14,7 @@ MAX_K = 50  # Max docs to retrieves
 K_MULTIPLIER = 5  # Multiplier for candidate retrieval before RRF and reranking
 
 
-def lightweight_rerank(query: str, sources: list[dict]) -> list[dict]:
+def lightweight_rerank(query_text: str, sources: list[dict]) -> list[dict]:
     """
     Rerank ChromaDB results by combining:
     1. Semantic score (from ChromaDB)
@@ -22,7 +23,7 @@ def lightweight_rerank(query: str, sources: list[dict]) -> list[dict]:
     """
 
     # Parse query
-    query_lower = query.lower().strip()
+    query_lower = query_text.lower().strip()
 
     for source in sources:
         semantic_score = source["distance"]
@@ -57,6 +58,7 @@ def query(
     k: int = 5,
     use_reranker: bool = False,
     use_hybrid_search: bool = False,
+    use_mistral: bool = False,
     filters: dict = {},
 ) -> tuple:
     """
@@ -69,7 +71,7 @@ def query(
         k: Number of final results to return (1-50)
         use_reranker: Whether to use reranking
         use_hybrid_search: Whether to combine vector + BM25 search (RRF fusion)
-
+        use_mistral: Whether to use Mistral to get a LLM answer
     Returns:
         (answer, sources)
     """
@@ -145,7 +147,11 @@ def query(
 
     # Keep only top-k final results
     sources = sources[:k]
-    answer = "AI answer is not implemented yet..."
+
+    # Mistral answer
+    answer_started = perf_counter()
+    answer = mistral_rag_answer(query_text, documents=sources) if use_mistral else ""
+    print(f"[timing] mistral answer: {perf_counter() - answer_started}")
     print(f"[timing] total query: {perf_counter() - query_started:.3f}s")
 
     return answer, sources
@@ -158,6 +164,7 @@ def query_cli():
     parser.add_argument("--k", type=int, default=5, help=f"Number of results to return (1-{MAX_K})", metavar=f"1-{MAX_K}")
     parser.add_argument("--use-rerank", action="store_true", help="Enable reranking")
     parser.add_argument("--use-hybrid", action="store_true", help="Enable hybrid search")
+    parser.add_argument("--use-mistral", action="store_true", help="Enable Mistral answer")
     parser.add_argument(
         "-f",
         "--filter",
@@ -173,6 +180,7 @@ def query_cli():
         k=args.k,
         use_reranker=args.use_rerank,
         use_hybrid_search=args.use_hybrid,
+        use_mistral=args.use_mistral,
         filters=dict(args.filter) if args.filter else {},
     )
 

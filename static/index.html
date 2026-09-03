@@ -36,12 +36,12 @@
         <div class="controls">
           <div class="toggle-group">
             <label class="toggle-switch">
-              <input type="checkbox" id="toggle-rerank" checked>
+              <input type="checkbox" id="toggle-rerank">
               <span class="toggle-slider"></span>
               <span class="toggle-label">Rerank</span>
             </label>
             <label class="toggle-switch">
-              <input type="checkbox" id="toggle-hybrid" checked>
+              <input type="checkbox" id="toggle-hybrid">
               <span class="toggle-slider"></span>
               <span class="toggle-label">Hybrid</span>
             </label>
@@ -111,7 +111,8 @@
           body: JSON.stringify({ 
             query: question,
             use_reranker: useReranker,
-            use_hybrid_search: useHybrid
+            use_hybrid_search: useHybrid,
+            use_mistral: true, // force mistral answers
           })
         });
 
@@ -140,7 +141,7 @@
             sourceCard.className = "source-card";
             sourceCard.innerHTML = `
               <div class="source-meta">
-                <span class="source-tag">Relevance: ${distance ?? rrfScore}</span>
+                <span class="source-tag">Relevance: ${distance}</span>
                 <span class="source-title">${title}</span>
               </div>
               <div class="source-section">${section}</div>
