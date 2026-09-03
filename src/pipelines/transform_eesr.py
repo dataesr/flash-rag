@@ -56,20 +56,18 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
     publication_epoch = to_unix_epoch(publication_date) if publication_date else 0
 
     page_id = page["PAGE_NOM_DE_CODE"].lower().replace("eesr", "")
+    page_keywords = [page.get("PAGE_CHAPITRE_FR"), page.get("PAGE_CHAPITRE_EN")]
 
     return {
+        "title": page.get("PAGE_TITRE_FR") or page.get("PAGE_TITRE_EN", ""),
         "source": "eesr",
-        "page_id": page_id,
-        "file_name": page["PAGE_FILE_NAME"],
-        "file_format": "json",
-        "doc_type": page.get("PAGE_TYPE_NOM", page.get("PAGE_TYPE_ID", "page")),
-        "title": page.get("PAGE_TITRE_FR") or page.get("PAGE_TITRE_EN") or "",
-        # "created": "",
-        # "modified": "",
         "publication_date": publication_date,
         "publication_epoch": publication_epoch,
-        # "keywords": "",
-        "chapitre": page.get("PAGE_CHAPITRE_FR") or page.get("PAGE_CHAPITRE_EN") or "",
+        "publication_type": page.get("PAGE_TYPE_NOM", page.get("PAGE_TYPE_ID", "page")),
+        "keywords": ", ".join([k for k in page_keywords if k]),
+        "file_id": page_id,
+        "file_name": page["PAGE_FILE_NAME"],
+        "file_format": "json",
     }
 
 
@@ -144,7 +142,7 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
     if not illustrations:
         return chunks
 
-    for illust_idx, illust in enumerate(illustrations):
+    for illust_index, illust in enumerate(illustrations):
         # Only process tableaux
         if illust.get("ILLUSTRATION_TYPE") != "Tableau":
             continue
@@ -164,15 +162,17 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
 
         chunks.append(
             {
-                "id": f"eesr_{page_id}_t{illust_idx}",
+                "id": f"eesr_{page_id}_t{illust_index}",
                 "document": document,
                 "metadata": {
                     **metadata,
                     "chunk_type": "table",
-                    "table_title": title,
-                    "table_type": sous_type,
+                    "chunk_len": len(document),
+                    "table_index": illust_index,
                     "table_headers": headers_text[:500],
                     "table_csv": csv_table,
+                    "table_title": title,
+                    "table_type": sous_type,
                 },
             }
         )

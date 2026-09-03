@@ -101,6 +101,7 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                             "metadata": {
                                 **document_metadata,
                                 "page_index": page_index,
+                                "section_index": section_index,
                                 "section_title": title[:200],
                                 "section_level": level,
                                 "chunk_type": "paragraph",
@@ -131,16 +132,15 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                             "document": markdown_table,
                             "metadata": {
                                 **document_metadata,
+                                "chunk_type": "table",
+                                "chunk_len": len(markdown_table),
                                 "page_index": page_index,
+                                "section_index": section_index,
                                 "section_title": title[:200],
                                 "section_level": level,
-                                "chunk_type": "table",
                                 "table_index": table_index,
-                                # "table_rows": len(table.get("data", [])),
-                                # "table_cols": len(headers),
-                                "table_headers": headers_text[:500],  # For BM25 keyword matching
-                                "table_csv": csv_table,  # Raw data for post-retrieval processing
-                                "chunk_len": len(markdown_table),
+                                "table_headers": headers_text[:500],
+                                "table_csv": csv_table,
                             },
                         }
                     )
@@ -149,21 +149,19 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
 
 def build_document_metadata(file: pd.Series) -> dict:
+    keywords = file.get("keywords", [])
+
     return {
+        "title": file["title"],
         "source": "ssmesr",
-        "record_id": file["id"],
+        # "record_id": file["id"],
+        "publication_type": file["subtype"],
+        "publication_date": str(file["publication_date"]),
+        "publication_epoch": to_unix_epoch(str(file["publication_date"])) if file["publication_date"] else 0,
+        "keywords": ", ".join(keywords) if isinstance(keywords, list) else str(keywords),
         "file_id": file["file_id"],
         "file_name": file["file_name"],
         "file_format": file["file_format"],
-        "doc_type": file["subtype"],
-        "publication_date": str(file["publication_date"]),
-        "publication_epoch": to_unix_epoch(str(file["publication_date"])) if file["publication_date"] else 0,
-        # "created": str(file.get("created", "")),
-        # "modified": str(file.get("modified", "")),
-        "title": file["title"],
-        "keywords": (
-            ", ".join(file.get("keywords", [])) if isinstance(file.get("keywords"), list) else str(file.get("keywords", ""))
-        ),
     }
 
 
