@@ -218,6 +218,75 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+.citations-section {
+  border-top: 1px solid var(--border-color);
+  margin-top: 24px;
+  padding-top: 20px;
+}
+
+.citations-header {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.citations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.citation-item {
+  width: 100%;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: grid;
+  font-size: 0.9rem;
+  gap: 10px;
+  grid-template-columns: auto 1fr auto;
+  padding: 10px 12px;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.citation-item:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: var(--accent-color);
+  transform: translateX(2px);
+}
+
+.citation-item:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.citation-number,
+.citation-source-index {
+  color: var(--accent-color);
+  font-weight: 700;
+}
+
+.citation-source-index {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.citation-highlight {
+  animation: citationHighlight 1.2s ease-out;
+}
+
+@keyframes citationHighlight {
+  0%, 100% { border-color: var(--border-color); }
+  25%, 75% { border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+}
+
 .sources-header {
   font-size: 1.25rem;
   font-weight: 700;

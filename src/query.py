@@ -194,7 +194,7 @@ def query_cli():
     print(f"Answer: {answer}")
     print(f"\nCitations:")
     for citation in citations:
-        print(f"\n[{citation.citation}] {citation.source_title} (source_index: {citation.source_index + 1})")
+        print(f"\n[{citation.citation}] {citation.source_title} (source_index: {citation.source_index - 1})")
     print(f"\nTop {len(sources)} sources:")
     for i, src in enumerate(sources, 1):
         print(f"\n{i}. {src['metadata'].get('title', 'N/A')} (distance: {src['distance']:.4f})")

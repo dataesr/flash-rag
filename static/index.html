@@ -65,6 +65,10 @@
             AI Answer
           </div>
           <div id="answer-content" class="answer-content"></div>
+          <div id="citations-section" class="citations-section" hidden>
+            <div class="citations-header">Citations</div>
+            <div id="citations-list" class="citations-list"></div>
+          </div>
         </div>
 
         <div class="sources-header">
@@ -89,6 +93,8 @@
 
       const resultsSection = document.getElementById("results-section");
       const answerContent = document.getElementById("answer-content");
+      const citationsSection = document.getElementById("citations-section");
+      const citationsList = document.getElementById("citations-list");
       const sourcesGrid = document.getElementById("sources-grid");
       const sendBtn = document.getElementById("send-btn");
       const btnText = document.getElementById("btn-text");
@@ -122,6 +128,31 @@
 
         // Populate results
         answerContent.textContent = data.answer;
+        citationsList.innerHTML = "";
+        citationsSection.hidden = !data.citations || data.citations.length === 0;
+        if (data.citations && data.citations.length > 0) {
+          data.citations.forEach(citation => {
+            const sourceIndex = Number(citation.source_index) - 1;
+            const citationButton = document.createElement("button");
+            citationButton.type = "button";
+            citationButton.className = "citation-item";
+            citationButton.disabled = !Number.isInteger(sourceIndex);
+            citationButton.innerHTML = `
+              <span class="citation-number">[${citation.citation}]</span>
+              <span class="citation-title"></span>
+              <span class="citation-source-index">Source ${Number.isInteger(sourceIndex) ? sourceIndex : "?"}</span>
+            `;
+            citationButton.querySelector(".citation-title").textContent = citation.source_title || "Unknown Document";
+            citationButton.onclick = () => {
+              const sourceCard = document.getElementById(`source-${sourceIndex}`);
+              if (!sourceCard) return;
+              sourceCard.scrollIntoView({ behavior: "smooth", block: "center" });
+              sourceCard.classList.add("citation-highlight");
+              setTimeout(() => sourceCard.classList.remove("citation-highlight"), 1200);
+            };
+            citationsList.appendChild(citationButton);
+          });
+        }
 
         // Clear and populate sources
         sourcesGrid.innerHTML = "";
@@ -139,6 +170,7 @@
 
             const sourceCard = document.createElement("div");
             sourceCard.className = "source-card";
+            sourceCard.id = `source-${data.sources.indexOf(source)}`;
             sourceCard.innerHTML = `
               <div class="source-meta">
                 <span class="source-tag">Relevance: ${distance}</span>
