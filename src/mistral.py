@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 import os
 import base64
 import json
@@ -118,17 +119,32 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
         return None
 
 
+class RagCitation(BaseModel):
+    citation: int
+    source_index: int
+    source_title: str
+
+
+class RagAnswer(BaseModel):
+    answer: str
+    citations: list[RagCitation] = []
+
+
 SYSTEM_PROMPT = """Tu es un assistant d'analyse de données. Tu réponds aux questions en te basant UNIQUEMENT sur les documents fournis.
-
-Règles strictes :
+ 
+Instructions strictes :
 1. Réponds directement à la question posée
-2. Cite les sources [nom du fichier - titre du document - année] quand tu cites des données
-3. Si les documents ne contiennent pas la réponse, dis-le explicitement
-4. Pour les chiffres : sois précis, inclus les années et les unités
-5. Si plusieurs documents contiennent des informations contradictoires, note-le
+2. Pour chaque chiffre, donnée ou stat mentionnée dans ta réponse :
+   - Associe-lui un numéro de citation [1], [2], etc.
+   - Enregistre la citation avec le numéro, l'index du document et son titre
+3. Si les documents ne contiennent pas la réponse, dis-le explicitement (pas de citations)
+4. Si plusieurs documents contiennent des infos contradictoires, cite tous les documents pertinents
+5. Sois précis : inclus les années et unités
 6. Sois concis : pas de phrases inutiles
-
-Format : réponse courte et factuelle."""
+ 
+Format final:
+- answer: Texte avec citations [1], [2], etc. intégrées
+- citations: Liste des sources avec numéro, index et titre"""
 
 USER_PROMPT = """Documents :
 ---
@@ -148,20 +164,20 @@ def build_user_prompt(query: str, documents: list[dict]) -> str:
     # Format docs
     docs = "\n\n".join(
         [
-            f"[{doc['metadata'].get('title', 'Sans titre')} ({doc['metadata'].get('publication_date', 'N/A')})]"
+            f"[{index}] {doc['metadata'].get('title', 'Sans titre')} ({doc['metadata'].get('publication_date', 'Sans date')})"
             f"\n{doc['document']}"
-            for doc in documents
+            for index, doc in enumerate(documents, start=1)
         ]
     )
     prompt = USER_PROMPT.format(query=query, docs=docs)
     return prompt
 
 
-def mistral_rag_answer(query_text: str, documents: list[dict]) -> str:
+def mistral_rag_answer(query_text: str, documents: list[dict]) -> RagAnswer:
     user_prompt = build_user_prompt(query_text, documents)
     print(f"[debug] User prompt:\n{user_prompt}")
 
-    chat_response = client.chat.complete(
+    chat_response = client.chat.parse(
         model=MISTRAL_RAG_MODEL,
         messages=[
             SystemMessage(content=SYSTEM_PROMPT),
@@ -169,7 +185,15 @@ def mistral_rag_answer(query_text: str, documents: list[dict]) -> str:
         ],
         temperature=0.1,
         max_tokens=500,
+        response_format=RagAnswer,
     )
 
-    answer: str = chat_response.choices[0].message.content
-    return answer.strip()
+    choices = chat_response.choices
+    if not isinstance(choices, list) or not len(choices):
+        raise ValueError(f"Invalid response from Mistral: {chat_response}")
+    message = choices[0].message
+    if message is None or not isinstance(message.parsed, RagAnswer):
+        raise ValueError(f"Invalid message type from Mistral: {message}")
+
+    rag_answer: RagAnswer = message.parsed
+    return rag_answer

@@ -21,7 +21,7 @@ class QueryRequest(BaseModel):
 @app.post("/query")
 async def query(payload: QueryRequest):
     print(f"[query] Received query request: {payload}")
-    answer, sources = run_query(
+    sources, answer, citations = run_query(
         payload.query,
         payload.source,
         payload.top_k,
@@ -30,7 +30,7 @@ async def query(payload: QueryRequest):
         payload.use_mistral,
         payload.filters,
     )
-    return {"query": payload.query, "answer": answer, "sources": sources}
+    return {"query": payload.query, "sources": sources, "answer": answer, "citations": citations}
 
 
 @app.post("/update")

@@ -1,4 +1,4 @@
-from src.mistral import mistral_rag_answer
+from src.mistral import mistral_rag_answer, RagCitation
 import re
 import argparse
 from time import perf_counter
@@ -61,7 +61,7 @@ def query(
     use_hybrid_search: bool = False,
     use_mistral: bool = False,
     filters: dict = {},
-) -> tuple:
+) -> tuple[list, str, list[RagCitation]]:
     """
     Query the RAG collection with optional hybrid search (dense + BM25) and reranking.
 
@@ -74,7 +74,7 @@ def query(
         use_hybrid_search: Whether to combine vector + BM25 search (RRF fusion)
         use_mistral: Whether to use Mistral to get a LLM answer
     Returns:
-        (answer, sources)
+        (sources, answer, citations)
     """
 
     query_started = perf_counter()
@@ -150,12 +150,18 @@ def query(
     sources = sources[:k]
 
     # Mistral answer
-    answer_started = perf_counter()
-    answer = mistral_rag_answer(query_text, documents=sources) if use_mistral else ""
-    print(f"[timing] mistral answer: {perf_counter() - answer_started}")
-    print(f"[timing] total query: {perf_counter() - query_started:.3f}s")
+    answer = "mistral_not_enabled"
+    citations = []
+    if use_mistral:
+        answer_started = perf_counter()
+        rag_answer = mistral_rag_answer(query_text, documents=sources)
+        answer = rag_answer.answer
+        citations = rag_answer.citations
+        print(f"[timing] mistral answer: {perf_counter() - answer_started}")
+        print(f"[debug] citations = {citations}")
 
-    return answer, sources
+    print(f"[timing] total query: {perf_counter() - query_started:.3f}s")
+    return sources, answer, citations
 
 
 def query_cli():
@@ -175,7 +181,7 @@ def query_cli():
     )
     args = parser.parse_args()
 
-    answer, sources = query(
+    sources, answer, citations = query(
         args.query,
         source=args.source,
         k=args.k,
@@ -186,6 +192,9 @@ def query_cli():
     )
 
     print(f"Answer: {answer}")
+    print(f"\nCitations:")
+    for citation in citations:
+        print(f"\n[{citation.citation}] {citation.source_title} (source_index: {citation.source_index + 1})")
     print(f"\nTop {len(sources)} sources:")
     for i, src in enumerate(sources, 1):
         print(f"\n{i}. {src['metadata'].get('title', 'N/A')} (distance: {src['distance']:.4f})")
