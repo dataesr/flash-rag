@@ -8,7 +8,9 @@ from src.utils import parse_key_value_pair
 from src.chromadb import get_collection
 from src.bm25 import bm25_search, rrf_fusion
 
-MAX_TIMESTAMP = datetime((datetime.now().year - 4), 1, 1).timestamp()  # 3 years ago + 1 year buffer
+CURRENT_DATE = datetime.now()
+CURRENT_YEAR = CURRENT_DATE.year
+MAX_TIMESTAMP = datetime((CURRENT_YEAR - 4), 1, 1).timestamp()  # 3 years ago + 1 year buffer
 MIN_CHUNK_LEN = 50  # Minimum chunk length to consider for querying
 MAX_K = 50  # Max docs to retrieves
 K_MULTIPLIER = 5  # Multiplier for candidate retrieval before RRF and reranking
@@ -24,26 +26,25 @@ def lightweight_rerank(query_text: str, sources: list[dict]) -> list[dict]:
 
     # Parse query
     query_lower = query_text.lower().strip()
+    query_words = set(query_lower.split())
+    query_years = {int(year) for year in re.findall(r"\b(20\d{2})\b", query_lower)}
 
     for source in sources:
-        semantic_score = source["distance"]
+        semantic_score = 1 - source["distance"]
 
         # Title relevance: how much query keywords overlap with title
         title_words = set(source["metadata"]["title"].lower().split())
-        query_words = set(query_lower.split())
         title_score = len(title_words & query_words) / (len(title_words | query_words) + 1e-6)
 
         # Temporal: does doc year match query years?
-        query_years = set(re.findall(r"\b(20\d{2})\b", query_lower))
-        publication_date = source["metadata"]["publication_date"]
-        publication_year = publication_date[:4]
-        publication_month = publication_date[5:7]
+        publication_epoch = source["metadata"]["publication_epoch"]
         temporal_score = 0.0
         if query_years:
-            if publication_year in query_years:
-                temporal_score = 1.0  # Exact match
-                # Prefer later-in-year dates for a target year when the query is year-only.
-                temporal_score += 0.5 * (int(publication_month) / 12.0)  # Normalize month to [0,1]
+            min_year = min(query_years)
+            min_epoch = datetime(min_year, 1, 1).timestamp()
+            if publication_epoch >= min_epoch:
+                max_epoch = CURRENT_DATE.timestamp()
+                temporal_score = min(1.5, 1.0 + 0.5 * ((publication_epoch - min_epoch) / (max_epoch - min_epoch)))
 
         # Combine with weights
         final_score = 0.5 * semantic_score + 0.25 * title_score + 0.25 * temporal_score
