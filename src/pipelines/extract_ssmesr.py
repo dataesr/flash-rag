@@ -189,7 +189,7 @@ def extract_one(file: pd.Series, use_cache: bool = True) -> str:
         return "failed"
 
 
-def extract_pdf(files: pd.DataFrame, use_cache: bool = True):
+def extract_pdf(files: pd.DataFrame, force_ocr: bool = False):
     if not len(files):
         print("[extract-ssmesr] Found 0 files to extract")
         return
@@ -202,7 +202,7 @@ def extract_pdf(files: pd.DataFrame, use_cache: bool = True):
         return
 
     # Extract pdf files
-    stats = pdfs.apply(extract_one, use_cache=use_cache, axis=1)
+    stats = pdfs.apply(extract_one, use_cache=not force_ocr, axis=1)
 
     # Count stats
     stats_counts = stats.value_counts()
@@ -213,7 +213,7 @@ def extract_pdf(files: pd.DataFrame, use_cache: bool = True):
     print(f"[extract-ssmesr] Extracted {extracted}/{len(pdfs)} pdf files ({skipped=}, {failed=})")
 
 
-def extract(use_cache: bool = True):
+def extract(use_cache: bool = True, force_ocr: bool = False):
     # Get records
     print("[warn] Only 'article' publications will be extracted")
     records = get_records()
@@ -225,7 +225,7 @@ def extract(use_cache: bool = True):
 
     # Extract pdf files
     print("[warn] Only pdf files will be extracted")
-    extract_pdf(files, use_cache)
+    extract_pdf(files, force_ocr=force_ocr)
 
     # Parse ocr results
     parse_ocr(files, use_cache)
@@ -233,11 +233,12 @@ def extract(use_cache: bool = True):
 
 def extract_cli():
     parser = argparse.ArgumentParser(description="Extract data from records files using OCR")
-    parser.add_argument("--no-cache", action="store_true", help="Force extract and parsing")
+    parser.add_argument("--no-cache", action="store_true", help="Force parsing")
+    parser.add_argument("--force-ocr", action="store_true", help="Force Mistral ocr")
     args = parser.parse_args()
 
     # Extract and parse pdf files
-    extract(use_cache=not args.use_cache)
+    extract(use_cache=not args.no_cache, force_ocr=args.force_ocr)
 
 
 if __name__ == "__main__":

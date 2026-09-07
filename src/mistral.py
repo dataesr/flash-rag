@@ -175,7 +175,7 @@ def build_user_prompt(query: str, documents: list[dict]) -> str:
 
 def mistral_rag_answer(query_text: str, documents: list[dict]) -> RagAnswer:
     user_prompt = build_user_prompt(query_text, documents)
-    print(f"[debug] User prompt:\n{user_prompt}")
+    # print(f"[debug] User prompt:\n{user_prompt}")
 
     chat_response = client.chat.parse(
         model=MISTRAL_RAG_MODEL,

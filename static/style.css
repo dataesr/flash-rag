@@ -92,13 +92,72 @@ textarea:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 16px;
 }
 
 .toggle-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  margin: 16px;
+  margin: 0 16px;
+}
+
+.source-select-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.source-select-group select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 30px 8px 10px;
+}
+
+.source-select-group select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.source-select-group option {
+  background: var(--bg-color);
+  color: var(--text-primary);
+}
+
+.top-k-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.top-k-group input {
+  width: 64px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.top-k-group input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
 .toggle-switch {
@@ -183,6 +242,7 @@ button:disabled {
 }
 
 .results-section {
+  position: relative;
   display: none;
   animation: fadeIn 0.4s ease-out;
 }

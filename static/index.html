@@ -45,6 +45,23 @@
               <span class="toggle-slider"></span>
               <span class="toggle-label">Hybrid</span>
             </label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-mistral" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Mistral</span>
+            </label>
+            </div>
+            <div class="source-select-group">
+              <label for="source-select">Source</label>
+              <select id="source-select">
+                <option value="all">All documents</option>
+                <option value="eesr">EESR</option>
+                <option value="ssmesr">SSMESR</option>
+              </select>
+            </div>
+            <div class="top-k-group">
+              <label for="top-k">Results</label>
+              <input id="top-k" type="number" min="1" max="50" value="5" step="1">
           </div>
           <button id="send-btn" onclick="query()">
             <span id="btn-text">Search</span>
@@ -101,8 +118,11 @@
       const loader = document.getElementById("loader");
 
       // Read toggle states
-      const useReranker = document.getElementById("toggle-rerank").checked;
-      const useHybrid = document.getElementById("toggle-hybrid").checked;
+      const useReranker = Boolean(document.getElementById("toggle-rerank").checked);
+      const useHybrid = Boolean(document.getElementById("toggle-hybrid").checked);
+      const useMistral = Boolean(document.getElementById("toggle-mistral").checked);
+      const docSource = String(document.getElementById("source-select").value);
+      const topK = Number(document.getElementById("top-k").value);
 
       // Set loading state
       sendBtn.disabled = true;
@@ -111,15 +131,18 @@
       resultsSection.classList.remove("active");
 
       try {
+        const payload = {
+          query: question,
+          source: docSource,
+          top_k: topK,
+          use_reranker: useReranker,
+          use_hybrid_search: useHybrid,
+          use_mistral: useMistral,
+        }
         const res = await fetch("/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            query: question,
-            use_reranker: useReranker,
-            use_hybrid_search: useHybrid,
-            use_mistral: true, // force mistral answers
-          })
+          body: JSON.stringify(payload)
         });
 
         if (!res.ok) throw new Error("Search failed");
@@ -132,7 +155,7 @@
         citationsSection.hidden = !data.citations || data.citations.length === 0;
         if (data.citations && data.citations.length > 0) {
           data.citations.forEach(citation => {
-            const sourceIndex = Number(citation.source_index) - 1;
+            const sourceIndex = Number(citation.source_index);
             const citationButton = document.createElement("button");
             citationButton.type = "button";
             citationButton.className = "citation-item";

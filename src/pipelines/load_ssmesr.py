@@ -78,7 +78,7 @@ def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     # all["modified"] = all["modified"].apply(pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce")
     merged = all.sort_values("modified").drop_duplicates(subset=["id", "title"], keep="last").reset_index(drop=True)
 
-    print(f"[load-ssmesr] Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(new)})")
+    print(f"[load-ssmesr] Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(existing)})")
     return merged
 
 

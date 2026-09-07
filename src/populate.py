@@ -32,6 +32,7 @@ def populate(
     build_bm25: bool = True,
 ):
     collection = get_collection(reset)
+    existing_ids = set(collection.get(include=[])["ids"])
     all_chunks = []
 
     if source in ["all", "ssmesr"]:
@@ -48,26 +49,28 @@ def populate(
         if len(eesr_chunks):
             all_chunks += eesr_chunks
 
-    if not all_chunks:
-        print("[populate] No chunks to ingest")
+    new_chunks = all_chunks
+    if not override:
+        new_chunks = [chunk for chunk in all_chunks if chunk["id"] not in existing_ids]
+
+    if not new_chunks:
+        print("[populate] No new chunks to ingest")
         return
 
-    ids = [chunk["id"] for chunk in all_chunks]
-    documents = [chunk["document"] for chunk in all_chunks]
-    metadatas = [chunk["metadata"] for chunk in all_chunks]
-
+    ids = [chunk["id"] for chunk in new_chunks]
+    documents = [chunk["document"] for chunk in new_chunks]
+    metadatas = [chunk["metadata"] for chunk in new_chunks]
     batches = batch_chroma_payload(ids, documents, metadatas)
 
     for batch_index, (batch_ids, batch_documents, batch_metadatas) in enumerate(batches, start=1):
         print(f"[populate] Writing batch {batch_index}/{len(batches)} ({len(batch_ids)} chunks) \
             into collection '{collection.name}'")
-
         if override:
             collection.upsert(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
         else:
             collection.add(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
 
-    print(f"[populate] Indexed {len(all_chunks)} chunks")
+    print(f"[populate] Indexed {len(new_chunks)} chunks")
 
     if build_bm25:
         build_bm25_index()

@@ -47,7 +47,7 @@ def lightweight_rerank(query_text: str, sources: list[dict]) -> list[dict]:
                 temporal_score = min(1.5, 1.0 + 0.5 * ((publication_epoch - min_epoch) / (max_epoch - min_epoch)))
 
         # Combine with weights
-        final_score = 0.5 * semantic_score + 0.25 * title_score + 0.25 * temporal_score
+        final_score = 0.6 * semantic_score + 0.2 * title_score + 0.2 * temporal_score
         source["rerank_score"] = final_score
 
     return sorted(sources, key=lambda x: x["rerank_score"], reverse=True)
