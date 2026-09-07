@@ -154,7 +154,7 @@ def build_document_metadata(file: pd.Series) -> dict:
     return {
         "title": file["title"],
         "source": "ssmesr",
-        # "record_id": file["id"],
+        "record_id": file["id"],
         "publication_type": file["subtype"],
         "publication_date": str(file["publication_date"]),
         "publication_epoch": to_unix_epoch(str(file["publication_date"])) if file["publication_date"] else 0,

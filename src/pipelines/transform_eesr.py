@@ -97,7 +97,7 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
 
     metadata = build_page_metadata(page)
     text = build_page_text(page)
-    page_id = metadata["page_id"]
+    file_id = metadata["file_id"]
 
     chunks: list[dict[str, Any]] = []
 
@@ -127,7 +127,7 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
         for chunk_idx, document in enumerate(text_chunks):
             chunks.append(
                 {
-                    "id": f"eesr_{page_id}_p{chunk_idx}",
+                    "id": f"eesr_{file_id}_p{chunk_idx}",
                     "document": document,
                     "metadata": {
                         **metadata,
@@ -162,7 +162,7 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
 
         chunks.append(
             {
-                "id": f"eesr_{page_id}_t{illust_index}",
+                "id": f"eesr_{file_id}_t{illust_index}",
                 "document": document,
                 "metadata": {
                     **metadata,
