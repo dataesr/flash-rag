@@ -161,11 +161,10 @@
             citationButton.className = "citation-item";
             citationButton.disabled = !Number.isInteger(sourceIndex);
             citationButton.innerHTML = `
-              <span class="citation-number">[${citation.citation}]</span>
-              <span class="citation-title"></span>
-              <span class="citation-source-index">Source ${Number.isInteger(sourceIndex) ? sourceIndex : "?"}</span>
+              <span class="citation-number">[${sourceIndex}]</span>
+              <span class="citation-title">${citation.source_title || "Unknown document"}</span>
+              <span class="citation-source-index">Source ${sourceIndex}</span>
             `;
-            citationButton.querySelector(".citation-title").textContent = citation.source_title || "Unknown Document";
             citationButton.onclick = () => {
               const sourceCard = document.getElementById(`source-${sourceIndex}`);
               if (!sourceCard) return;

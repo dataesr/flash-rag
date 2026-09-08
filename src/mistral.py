@@ -1,9 +1,9 @@
-from pydantic import BaseModel
 import os
 import base64
 import json
 import numpy as np
 from typing import List, Dict, Any
+from pydantic import BaseModel, Field
 from mistralai.client import Mistral
 from mistralai.client.models import SystemMessage, UserMessage
 from chromadb.api.types import Embeddings, Documents, EmbeddingFunction, Space
@@ -120,13 +120,12 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
 
 
 class RagCitation(BaseModel):
-    citation: int
-    source_index: int
-    source_title: str
+    source_index: int = Field(..., description="Index du document dans la liste fournie")
+    source_title: str = Field(..., description="Titre du document")
 
 
 class RagAnswer(BaseModel):
-    answer: str
+    answer: str = Field(..., description="Réponse avec citations [1], [2], etc.")
     citations: list[RagCitation] = []
 
 
@@ -135,16 +134,17 @@ SYSTEM_PROMPT = """Tu es un assistant d'analyse de données. Tu réponds aux que
 Instructions strictes :
 1. Réponds directement à la question posée
 2. Pour chaque chiffre, donnée ou stat mentionnée dans ta réponse :
-   - Associe-lui un numéro de citation [1], [2], etc.
-   - Enregistre la citation avec le numéro, l'index du document et son titre
+   - Indique l'INDEX du document dans la liste fournie
+   - Enregistre la citation avec l'INDEX (commence à 1) et le titre du document
+   - Réutilise le même INDEX si tu recites le même document
 3. Si les documents ne contiennent pas la réponse, dis-le explicitement (pas de citations)
 4. Si plusieurs documents contiennent des infos contradictoires, cite tous les documents pertinents
 5. Sois précis : inclus les années et unités
 6. Sois concis : pas de phrases inutiles
  
 Format final:
-- answer: Texte avec citations [1], [2], etc. intégrées
-- citations: Liste des sources avec numéro, index et titre"""
+- answer: Texte avec citations [1], [2], [3] etc
+- citations: Liste des documents cités"""
 
 USER_PROMPT = """Documents :
 ---
