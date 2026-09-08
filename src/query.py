@@ -34,7 +34,7 @@ def lightweight_rerank(query_text: str, sources: list[dict]) -> list[dict]:
 
         # Title relevance: how much query keywords overlap with title
         title_words = set(source["metadata"]["title"].lower().split())
-        title_score = len(title_words & query_words) / (len(title_words | query_words) + 1e-6)
+        title_score = len(title_words & query_words) / max(1, len(title_words))
 
         # Temporal: does doc year match query years?
         publication_epoch = source["metadata"]["publication_epoch"]
@@ -43,11 +43,12 @@ def lightweight_rerank(query_text: str, sources: list[dict]) -> list[dict]:
             min_year = min(query_years)
             min_epoch = datetime(min_year, 1, 1).timestamp()
             if publication_epoch >= min_epoch:
-                max_epoch = CURRENT_DATE.timestamp()
-                temporal_score = min(1.5, 1.0 + 0.5 * ((publication_epoch - min_epoch) / (max_epoch - min_epoch)))
+                # max_epoch = CURRENT_DATE.timestamp()
+                # temporal_score = min(1.5, 1.0 + 0.5 * ((publication_epoch - min_epoch) / (max_epoch - min_epoch)))
+                temporal_score = 1.0
 
         # Combine with weights
-        final_score = 0.6 * semantic_score + 0.2 * title_score + 0.2 * temporal_score
+        final_score = 0.85 * semantic_score + 0.05 * title_score + 0.1 * temporal_score
         source["rerank_score"] = final_score
 
     return sorted(sources, key=lambda x: x["rerank_score"], reverse=True)
