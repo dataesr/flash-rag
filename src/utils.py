@@ -2,6 +2,7 @@ import os
 import json
 import httpx
 import argparse
+import unicodedata
 from datetime import datetime
 
 
@@ -76,9 +77,20 @@ def to_unix_epoch(date_str: str) -> int:
         raise error
 
 
-def parse_key_value_pair(arg):
+def parse_key_value_pair(arg: str) -> tuple[str, str]:
     """Parse a single key=value pair."""
     if "=" not in arg:
         raise argparse.ArgumentTypeError(f"Invalid format '{arg}'. Expected key=value")
     key, value = arg.split("=", 1)
     return (key.strip(), value.strip())
+
+
+def normalize_text(text: str, sep: str = " ") -> str:
+    """Normalize text: remove accent and non alpha num characters."""
+    text = "".join(
+        char if char.isalnum() else " "
+        for char in unicodedata.normalize("NFD", text.lower())
+        if unicodedata.category(char) != "Mn"
+    )
+    text = sep.join(text.split())
+    return text

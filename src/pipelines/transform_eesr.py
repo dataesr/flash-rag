@@ -3,7 +3,7 @@ import argparse
 from typing import Any
 import pandas as pd
 from src.pipelines.load_eesr import get_pages
-from src.utils import save_jsonl, to_unix_epoch
+from src.utils import save_jsonl, to_unix_epoch, normalize_text
 
 OUTPUT_DIR = "./data"
 OUTPUT_CHUNKS = f"{OUTPUT_DIR}/eesr_chunks.jsonl"
@@ -51,16 +51,24 @@ def parse_illustration(illustration: dict) -> tuple[str, str, str]:
 
 def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
     publication = page.get("PUBLICATION") or {}
+    publication_url = publication.get("PUBLICATION_LIEN_SITE_COMPAGNON") or publication.get("PUBLICATION_LIEN") or ""
     publication_date = publication.get("PUBLICATION_DATE_TRI") or publication.get("PUBLICATION_DATE_ANNEE") or ""
     publication_date = publication_date + "-01" if publication_date and len(publication_date) == 7 else publication_date
     publication_epoch = to_unix_epoch(publication_date) if publication_date else 0
 
     page_id = page["PAGE_NOM_DE_CODE"].lower().replace("eesr", "")
     page_keywords = [page.get("PAGE_CHAPITRE_FR"), page.get("PAGE_CHAPITRE_EN")]
+    page_url = (
+        publication_url
+        + (page.get("PAGE_THEME_CODE") or "")
+        + "/"
+        + normalize_text(page.get("PAGE_TITRE_FR") or "", sep="_")
+    )
 
     return {
         "title": page.get("PAGE_TITRE_FR") or page.get("PAGE_TITRE_EN", ""),
         "source": "eesr",
+        "record_id": publication["PUBLICATION_NOM_DE_CODE"],
         "publication_date": publication_date,
         "publication_epoch": publication_epoch,
         "publication_type": page.get("PAGE_TYPE_NOM", page.get("PAGE_TYPE_ID", "page")),
@@ -68,6 +76,7 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
         "file_id": page_id,
         "file_name": page["PAGE_FILE_NAME"],
         "file_format": "json",
+        "file_url": page_url,
     }
 
 
