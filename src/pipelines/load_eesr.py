@@ -72,7 +72,7 @@ def get_pages() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def load(use_cache: bool = True, force_download: bool = False):
+def load(use_cache: bool = True, use_fetch: bool = True, force_download: bool = False):
 
     if use_cache and os.path.exists(OUTPUT_PAGES):
         print(f"[load-eesr] Pages already loaded in {OUTPUT_PAGES}, skipping")

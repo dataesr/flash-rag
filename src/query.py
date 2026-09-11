@@ -2,7 +2,7 @@ from src.mistral import mistral_rag_answer, RagCitation
 import re
 import argparse
 from time import perf_counter
-from typing import Literal
+from typing import Literal, Any
 from datetime import datetime
 from src.utils import parse_key_value_pair
 from src.chromadb import get_collection
@@ -56,24 +56,22 @@ def lightweight_rerank(query_text: str, sources: list[dict]) -> list[dict]:
 
 def query(
     query_text: str,
-    source: Literal["all", "eesr", "ssmesr"] = "all",
     k: int = 5,
     use_reranker: bool = False,
     use_hybrid_search: bool = False,
     use_mistral: bool = False,
-    filters: dict = {},
+    filters: dict[str, str] = {},
 ) -> tuple[list, str, list[RagCitation]]:
     """
     Query the RAG collection with optional hybrid search (dense + BM25) and reranking.
 
     Args:
         query_text: The query string
-        source: Which source to query from
-        filters: Additionnal filters
         k: Number of final results to return (1-50)
         use_reranker: Whether to use reranking
         use_hybrid_search: Whether to combine vector + BM25 search (RRF fusion)
         use_mistral: Whether to use Mistral to get a LLM answer
+        filters: Additionnal filters
     Returns:
         (sources, answer, citations)
     """
@@ -94,11 +92,16 @@ def query(
         ]
     }
 
-    if filters.get("chunk_type"):
-        where_filter["$and"].append({"chunk_type": {"$eq": filters["chunk_type"]}})
-
-    if source != "all":
-        where_filter["$and"].append({"source": {"$eq": source}})  # ty: ignore[invalid-argument-type]
+    for key, value in filters.items():
+        if key in ["reference", "publication_type", "chunk_type"]:
+            where_filter["$and"].append({key: {"$eq": value}})  # ty: ignore[invalid-argument-type]
+        elif key == "keywords":
+            keywords = value.split("|")
+            keywords_filter = [{"keywords": {"$contains": k.strip()}} for k in keywords if k.strip()]
+            if len(keywords):
+                where_filter["$and"].append({"$or": keywords_filter})  # ty: ignore[invalid-argument-type]
+        else:
+            print(f"[warning] filter {key}={value} skipped")
 
     # Retrieve more candidates than the final k because
     # RRF + reranking need a larger candidate pool
@@ -168,7 +171,6 @@ def query(
 def query_cli():
     parser = argparse.ArgumentParser(description="Query the ChromaDB collection")
     parser.add_argument("--query", type=str, required=True, help="Query text")
-    parser.add_argument("--source", choices=["all", "eesr", "ssmesr"], default="all", help="Source to query")
     parser.add_argument("--k", type=int, default=5, help=f"Number of results to return (1-{MAX_K})", metavar=f"1-{MAX_K}")
     parser.add_argument("--use-rerank", action="store_true", help="Enable reranking")
     parser.add_argument("--use-hybrid", action="store_true", help="Enable hybrid search")
@@ -184,7 +186,6 @@ def query_cli():
 
     sources, answer, citations = query(
         args.query,
-        source=args.source,
         k=args.k,
         use_reranker=args.use_rerank,
         use_hybrid_search=args.use_hybrid,
@@ -195,7 +196,7 @@ def query_cli():
     print(f"Answer: {answer}")
     print(f"\nCitations:")
     for citation in citations:
-        print(f"\n[{citation.citation}] {citation.source_title} (source_index: {citation.source_index - 1})")
+        print(f"\n[{citation.source_index}] {citation.source_title}")
     print(f"\nTop {len(sources)} sources:")
     for i, src in enumerate(sources, 1):
         print(f"\n{i}. {src['metadata'].get('title', 'N/A')} (distance: {src['distance']:.4f})")

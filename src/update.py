@@ -8,7 +8,7 @@ from src.pipelines.transform_ssmesr import transform as transform_ssmesr
 from src.pipelines.transform_eesr import transform as transform_eesr
 from src.populate import populate
 
-SOURCES = ["ssmesr", "eesr"]
+REFERENCES = ["ssmesr", "eesr"]
 LOAD_FNC = {
     "ssmesr": load_ssmesr,
     "eesr": load_eesr,
@@ -24,8 +24,9 @@ TRANSFORM_FNC = {
 
 class UpdateRequest(BaseModel):
     task: Literal["all", "load", "extract", "transform", "populate"] = "all"
-    source: Literal["all", "ssmesr", "eesr"] = "all"
+    reference: Literal["all", "ssmesr", "eesr"] = "all"
     use_cache: bool = True
+    use_fetch: bool = True
     force_download: bool = False
     force_ocr: bool = False
     db_override: bool = False
@@ -33,25 +34,25 @@ class UpdateRequest(BaseModel):
 
 
 def update(payload: UpdateRequest):
-    sources = [payload.source] if payload.source != "all" else SOURCES
-    for source in sources:
-        load_fnc = LOAD_FNC.get(source)
-        extract_fnc = EXTRACT_FNC.get(source)
-        transform_fnc = TRANSFORM_FNC.get(source)
+    refs = [payload.reference] if payload.reference != "all" else REFERENCES
+    for ref in refs:
+        load_fnc = LOAD_FNC.get(ref)
+        extract_fnc = EXTRACT_FNC.get(ref)
+        transform_fnc = TRANSFORM_FNC.get(ref)
 
         if payload.task in ["all", "load"]:
             # load new documents
             if load_fnc:
                 print(f"\n{'='*60}")
-                print(f"=== Loading {source.upper()} documents ===")
+                print(f"=== Loading {ref.upper()} documents ===")
                 print(f"{'='*60}")
-                load_fnc(use_cache=payload.use_cache, force_download=payload.force_download)
+                load_fnc(use_cache=payload.use_cache, use_fetch=payload.use_fetch, force_download=payload.force_download)
 
         if payload.task in ["all", "extract"]:
             # extract documents (OCR)
             if extract_fnc:
                 print(f"\n{'='*60}")
-                print(f"=== Extracting {source.upper()} documents ===")
+                print(f"=== Extracting {ref.upper()} documents ===")
                 print(f"{'='*60}")
                 extract_fnc(use_cache=payload.use_cache, force_ocr=payload.force_ocr)
 
@@ -59,7 +60,7 @@ def update(payload: UpdateRequest):
             # transform documents (chunking)
             if transform_fnc:
                 print(f"\n{'='*60}")
-                print(f"=== Chunking {source.upper()} documents ===")
+                print(f"=== Chunking {ref.upper()} documents ===")
                 print(f"{'='*60}")
                 transform_fnc(use_cache=payload.use_cache)
 
@@ -69,7 +70,7 @@ def update(payload: UpdateRequest):
         print("=== Populating collection ===")
         print(f"{'='*60}")
         populate(
-            source=payload.source,
+            reference=payload.reference,
             use_cache=payload.use_cache,
             reset=payload.db_reset,
             override=payload.db_override,
@@ -85,7 +86,7 @@ def update_cli():
     parser.add_argument(
         "--task", choices=["all", "load", "extract", "transform", "populate"], default="all", help="Task to perform"
     )
-    parser.add_argument("--source", choices=["all", "ssmesr", "eesr"], default="all", help="Source to update")
+    parser.add_argument("--reference", choices=["all", "ssmesr", "eesr"], default="all", help="Reference to update")
     parser.add_argument("--no-cache", action="store_true", help="Force reprocessing of documents")
     parser.add_argument("--force-download", action="store_true", help="Force redownload of documents")
     parser.add_argument("--force-ocr", action="store_true", help="Force re-ocr of files")
@@ -95,7 +96,7 @@ def update_cli():
 
     payload = UpdateRequest(
         task=args.task,
-        source=args.source,
+        reference=args.reference,
         use_cache=not args.no_cache,
         force_download=args.force_download,
         force_ocr=args.force_ocr,

@@ -49,9 +49,6 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
                 raise
 
     df = pd.DataFrame(all_records)
-    # df[["created", "modified"]] = df[["created", "modified"]].apply(
-    #     pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce"
-    # )
     return df
 
 
@@ -75,7 +72,6 @@ def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
         return existing
 
     all = pd.concat([existing, new])
-    # all["modified"] = all["modified"].apply(pd.to_datetime, format="%Y-%m-%d", utc=True, errors="coerce")
     merged = all.sort_values("modified").drop_duplicates(subset=["id", "title"], keep="last").reset_index(drop=True)
 
     print(f"[load-ssmesr] Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(existing)})")
@@ -97,7 +93,7 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
         files_data = (
             pd.json_normalize(exploded["files"], sep="_")
             .add_prefix("file_")
-            .rename(columns={"file_key": "file_name", "file_links_self": "file_url"})
+            .rename(columns={"file_key": "file_name", "file_links_self": "file_download"})
             .reset_index(drop=True)
         )
         # Build file paths
@@ -108,16 +104,18 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
 
         # Get metadata
         metadata = exploded["metadata"]
-        metadata_data = pd.json_normalize(metadata)[["title", "publication_date", "description", "keywords"]].reset_index(
-            drop=True
-        )
+        metadata_data = pd.json_normalize(metadata)[
+            ["title", "publication_date", "description", "keywords", "access_right"]
+        ].reset_index(drop=True)
 
         # Get resource types
         resource_types = metadata.apply(lambda x: x.get("resource_type") if isinstance(x, dict) else None)
         types_data = pd.json_normalize(resource_types).rename(columns={"title": "type_title"}).reset_index(drop=True)
 
         # Merge files
-        files = pd.concat([exploded[["id", "created", "modified"]], files_data, metadata_data, types_data], axis=1)
+        files = pd.concat(
+            [exploded[["id", "created", "modified", "doi_url"]], files_data, metadata_data, types_data], axis=1
+        )
 
         # Drop duplicates
         files = files.drop_duplicates(subset=["file_name", "title"], keep="last").reset_index(drop=True)
@@ -131,7 +129,7 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
 
 
 def download_one_file(file: pd.Series, use_cache: bool = True) -> str:
-    url = file["file_url"]
+    url = file["file_download"]
     path = file["file_path"]
     name = file["file_name"]
 
@@ -176,14 +174,16 @@ def download_files(records: pd.DataFrame, use_cache: bool = True, formats: list[
     print(f"[load-ssmesr] Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
 
 
-def load(use_cache: bool = True, force_download: bool = False):
+def load(use_cache: bool = True, use_fetch: bool = True, force_download: bool = False):
+
+    existing, new = pd.DataFrame(), pd.DataFrame()
 
     # Get existing records
-    existing = get_records()
+    if use_cache:
+        existing = get_records()
 
     # Fetch new records
-    new = pd.DataFrame()
-    if not use_cache:
+    if not use_cache or use_fetch:
         new = fetch_records(BASE_URL)
 
     # Merge with existing
@@ -200,9 +200,10 @@ def load(use_cache: bool = True, force_download: bool = False):
 def load_cli():
     parser = argparse.ArgumentParser(description="Load records")
     parser.add_argument("--no-cache", action="store_true", help="Force reload of data")
+    parser.add_argument("--no-fetch", action="store_true", help="Don't fetch new data")
     parser.add_argument("--force-download", action="store_true", help="Force redownload of data")
     args = parser.parse_args()
-    load(use_cache=not args.no_cache, force_download=args.force_download)
+    load(use_cache=not args.no_cache, use_fetch=not args.no_fetch, force_download=args.force_download)
 
 
 if __name__ == "__main__":

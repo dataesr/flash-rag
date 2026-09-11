@@ -57,13 +57,13 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
     chunks = []
     for page in pages:
-        page_index = page.get("index", 0)
+        page_index = page.get("index", 1) + 1  # start at 1
         parsed_sections = page.get("parsed", [])
 
         if not parsed_sections:
             continue
 
-        for section_index, section in enumerate(parsed_sections):
+        for section_index, section in enumerate(parsed_sections, start=1):
             title = section.get("title", "")
             level = section.get("level", 0)
             paragraphs = section.get("paragraphs", [])
@@ -93,7 +93,7 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                 #         f"[transform_ssmesr] {file_name}: page={section_index}, section={page_index} --> {len(current_chunks)} paragraph chunks"
                 #     )
 
-                for chunk_index, chunk in enumerate(current_chunks):
+                for chunk_index, chunk in enumerate(current_chunks, start=1):
                     chunks.append(
                         {
                             "id": f"ssmesr_{file_name_no_ext}_p{page_index}_s{section_index}_p{chunk_index}",
@@ -112,9 +112,9 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
             # ========== TABLES ==========
             if tables:
-                # print(f"[transform_ssmesr] {file_id}: page={section_index}, section={page_index} --> {len(tables)} table(s)")
+                # print(f"[transform_ssmesr] {file_id}: page={page_index}, section={section_index} --> {len(tables)} table(s)")
 
-                for table_index, table in enumerate(tables):
+                for table_index, table in enumerate(tables, start=1):
                     if not isinstance(table, dict):
                         print(f"[warn] Empty table found for document {file_name} ({ocr_path})")
                         continue
@@ -138,9 +138,9 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                                 "section_index": section_index,
                                 "section_title": title[:200],
                                 "section_level": level,
-                                "table_index": table_index,
-                                "table_headers": headers_text[:500],
-                                "table_csv": csv_table,
+                                # "table_index": table_index,
+                                # "table_headers": headers_text[:500],
+                                # "table_csv": csv_table,
                             },
                         }
                     )
@@ -153,15 +153,17 @@ def build_document_metadata(file: pd.Series) -> dict:
 
     return {
         "title": file["title"],
-        "source": "ssmesr",
+        "reference": "ssmesr",
         "record_id": file["id"],
         "publication_type": file["subtype"],
         "publication_date": str(file["publication_date"]),
         "publication_epoch": to_unix_epoch(str(file["publication_date"])) if file["publication_date"] else 0,
-        "keywords": ", ".join(keywords) if isinstance(keywords, list) else str(keywords),
+        "keywords": " | ".join([k.lower() for k in keywords if k] if isinstance(keywords, list) else []),
         "file_id": file["file_id"],
         "file_name": file["file_name"],
         "file_format": file["file_format"],
+        "file_url": file["doi_url"],
+        "file_access": file.get("access_right", ""),
     }
 
 

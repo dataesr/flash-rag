@@ -10,7 +10,6 @@ app = FastAPI(title="Flash Notes RAG API")
 
 class QueryRequest(BaseModel):
     query: str
-    source: Literal["all", "eesr", "ssmesr"] = "all"
     top_k: int = 5
     use_reranker: bool = False
     use_hybrid_search: bool = False
@@ -23,7 +22,6 @@ async def query(payload: QueryRequest):
     print(f"[query] Received query request: {payload}")
     sources, answer, citations = run_query(
         payload.query,
-        payload.source,
         payload.top_k,
         payload.use_reranker,
         payload.use_hybrid_search,

@@ -9,7 +9,24 @@ OUTPUT_DIR = "./data"
 OUTPUT_CHUNKS = f"{OUTPUT_DIR}/eesr_chunks.jsonl"
 CHUNK_MAX_CHARS = 3000
 CONTENT_FIELDS = ["PAGE_CHAPEAU_FR", "PAGE_TEXTE_FR", "PAGE_METHODE_FR", "PAGE_NOTES_FR"]
-
+EESR_KEYWORDS = [
+    "Enseignement supérieur",
+    "Recherche",
+    "Statistiques",
+    "Innovation",
+    "Emploi scientifique",
+    "Ressources humaines",
+    "Formations et diplômes",
+    "Doctorat",
+    "Vie étudiante",
+    "Propriété intellectuelle",
+    "Financements",
+    "Documentation",
+    "Apprentissage",
+    "Orientation, parcours et réussite",
+    "Insertion professionnelle",
+    "Publications scientifiques",
+]
 
 def parse_illustration(illustration: dict) -> tuple[str, str, str]:
     """
@@ -50,33 +67,30 @@ def parse_illustration(illustration: dict) -> tuple[str, str, str]:
 
 
 def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
-    publication = page.get("PUBLICATION") or {}
+    publication = page["PUBLICATION"]
     publication_url = publication.get("PUBLICATION_LIEN_SITE_COMPAGNON") or publication.get("PUBLICATION_LIEN") or ""
     publication_date = publication.get("PUBLICATION_DATE_TRI") or publication.get("PUBLICATION_DATE_ANNEE") or ""
     publication_date = publication_date + "-01" if publication_date and len(publication_date) == 7 else publication_date
     publication_epoch = to_unix_epoch(publication_date) if publication_date else 0
 
-    page_id = page["PAGE_NOM_DE_CODE"].lower().replace("eesr", "")
-    page_keywords = [page.get("PAGE_CHAPITRE_FR"), page.get("PAGE_CHAPITRE_EN")]
-    page_url = (
-        publication_url
-        + (page.get("PAGE_THEME_CODE") or "")
-        + "/"
-        + normalize_text(page.get("PAGE_TITRE_FR") or "", sep="_")
-    )
+    file_id = page["PAGE_NOM_DE_CODE"].lower().replace("eesr", "")
+    page_url = publication_url + (page.get("PAGE_THEME_CODE") or "") + "/" + normalize_text(page["PAGE_TITRE_FR"], sep="_")
 
     return {
-        "title": page.get("PAGE_TITRE_FR") or page.get("PAGE_TITRE_EN", ""),
-        "source": "eesr",
+        "title": page["PAGE_TITRE_FR"],
+        "reference": "eesr",
         "record_id": publication["PUBLICATION_NOM_DE_CODE"],
         "publication_date": publication_date,
         "publication_epoch": publication_epoch,
-        "publication_type": page.get("PAGE_TYPE_NOM", page.get("PAGE_TYPE_ID", "page")),
-        "keywords": ", ".join([k for k in page_keywords if k]),
-        "file_id": page_id,
+        "publication_type": "book",
+        "keywords": " | ".join([k.lower() for k in EESR_KEYWORDS]),
+        "file_id": file_id,
         "file_name": page["PAGE_FILE_NAME"],
         "file_format": "json",
         "file_url": page_url,
+        "file_access": "open",
+        "page_index": page["PAGE_NUMERO"],
+        "section_title": page["PAGE_TITRE_FR"],
     }
 
 
@@ -133,7 +147,7 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
         if current_chunk:
             text_chunks.append(current_chunk)
 
-        for chunk_idx, document in enumerate(text_chunks):
+        for chunk_idx, document in enumerate(text_chunks, start=1):
             chunks.append(
                 {
                     "id": f"eesr_{file_id}_p{chunk_idx}",
@@ -177,10 +191,10 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
                     **metadata,
                     "chunk_type": "table",
                     "chunk_len": len(document),
-                    "table_index": illust_index,
-                    "table_headers": headers_text[:500],
-                    "table_csv": csv_table,
-                    "table_title": title,
+                    # "table_index": illust_index,
+                    # "table_headers": headers_text[:500],
+                    # "table_csv": csv_table,
+                    "table_title": title[:200],
                     "table_type": sous_type,
                 },
             }
