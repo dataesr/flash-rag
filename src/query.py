@@ -85,7 +85,7 @@ def query(
     collection = get_collection()
 
     # Build filters
-    where_filter = {
+    where_filter: dict[str, list] = {
         "$and": [
             {"publication_epoch": {"$gte": MAX_TIMESTAMP}},
             {"chunk_len": {"$gte": MIN_CHUNK_LEN}},
@@ -94,12 +94,13 @@ def query(
 
     for key, value in filters.items():
         if key in ["reference", "publication_type", "chunk_type"]:
-            where_filter["$and"].append({key: {"$eq": value}})  # ty: ignore[invalid-argument-type]
+            where_filter["$and"].append({key: {"$eq": value}})
         elif key == "keywords":
-            keywords = value.split("|")
-            keywords_filter = [{"keywords": {"$contains": k.strip()}} for k in keywords if k.strip()]
-            if len(keywords):
-                where_filter["$and"].append({"$or": keywords_filter})  # ty: ignore[invalid-argument-type]
+            keywords = [k.strip() for k in value.split("|") if k.strip()]
+            if len(keywords) == 1:
+                where_filter["$and"].append({"keywords": {"$contains": keywords[0]}})
+            elif len(keywords) > 1:
+                where_filter["$and"].append({"$or": [{"keywords": {"$contains": k}} for k in keywords]})
         else:
             print(f"[warning] filter {key}={value} skipped")
 
