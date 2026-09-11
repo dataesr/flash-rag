@@ -14,7 +14,7 @@ class QueryRequest(BaseModel):
     use_reranker: bool = False
     use_hybrid_search: bool = False
     use_mistral: bool = False
-    filters: dict[str, str] = {}
+    filters: dict[str, str | list[str]] = {}
 
 
 @app.post("/query")

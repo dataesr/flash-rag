@@ -83,7 +83,7 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
         "publication_date": publication_date,
         "publication_epoch": publication_epoch,
         "publication_type": "book",
-        "keywords": " | ".join([k.lower() for k in EESR_KEYWORDS]),
+        "keywords": [k.lower() for k in EESR_KEYWORDS],
         "file_id": file_id,
         "file_name": page["PAGE_FILE_NAME"],
         "file_format": "json",

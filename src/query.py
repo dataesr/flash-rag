@@ -60,7 +60,7 @@ def query(
     use_reranker: bool = False,
     use_hybrid_search: bool = False,
     use_mistral: bool = False,
-    filters: dict[str, str] = {},
+    filters: dict[str, str | list[str]] = {},
 ) -> tuple[list, str, list[RagCitation]]:
     """
     Query the RAG collection with optional hybrid search (dense + BM25) and reranking.
@@ -94,13 +94,15 @@ def query(
 
     for key, value in filters.items():
         if key in ["reference", "publication_type", "chunk_type"]:
-            where_filter["$and"].append({key: {"$eq": value}})
+            val = value[0] if isinstance(value, list) else value
+            where_filter["$and"].append({key: {"$eq": val}})
         elif key == "keywords":
-            keywords = [k.strip() for k in value.split("|") if k.strip()]
+            val = value if isinstance(value, list) else [value]
+            keywords = [k.strip() for k in val if k.strip()]
             if len(keywords) == 1:
-                where_filter["$and"].append({"keywords": {"$contains": keywords[0]}})
+                where_filter["$and"].append({key: {"$contains": keywords[0]}})
             elif len(keywords) > 1:
-                where_filter["$and"].append({"$or": [{"keywords": {"$contains": k}} for k in keywords]})
+                where_filter["$and"].append({"$or": [{key: {"$contains": k}} for k in keywords]})
         else:
             print(f"[warning] filter {key}={value} skipped")
 

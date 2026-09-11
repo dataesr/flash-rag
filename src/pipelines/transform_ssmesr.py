@@ -150,6 +150,7 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
 def build_document_metadata(file: pd.Series) -> dict:
     keywords = file.get("keywords", [])
+    keywords = [k.lower() for k in keywords if k] if isinstance(keywords, list) else []
 
     return {
         "title": file["title"],
@@ -158,7 +159,7 @@ def build_document_metadata(file: pd.Series) -> dict:
         "publication_type": file["subtype"],
         "publication_date": str(file["publication_date"]),
         "publication_epoch": to_unix_epoch(str(file["publication_date"])) if file["publication_date"] else 0,
-        "keywords": " | ".join([k.lower() for k in keywords if k] if isinstance(keywords, list) else []),
+        "keywords": keywords if len(keywords) else None,
         "file_id": file["file_id"],
         "file_name": file["file_name"],
         "file_format": file["file_format"],
