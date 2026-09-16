@@ -75,6 +75,7 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
 
     file_id = page["PAGE_NOM_DE_CODE"].lower().replace("eesr", "")
     page_url = publication_url + (page.get("PAGE_THEME_CODE") or "") + "/" + normalize_text(page["PAGE_TITRE_FR"], sep="_")
+    keywords = publication.get("PUBLICATION_THEMATIQUES", "").split(";")
 
     return {
         "title": page["PAGE_TITRE_FR"],
@@ -83,7 +84,7 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
         "publication_date": publication_date,
         "publication_epoch": publication_epoch,
         "publication_type": "book",
-        "keywords": [k.lower() for k in EESR_KEYWORDS],
+        "keywords": [k.lower() for k in keywords],
         "file_id": file_id,
         "file_name": page["PAGE_FILE_NAME"],
         "file_format": "json",
