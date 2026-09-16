@@ -15,7 +15,9 @@ MAX_DOCUMENTS_PER_BATCH = 8
 load_dotenv()
 
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
-MISTRAL_RAG_MODEL = "mistral-small-latest"
+MISTRAL_RAG_MODEL = "mistral-small-2603"
+MISTRAL_OCR_MODEL = "mistral-ocr-2512"  # TODO: try mistral-ocr-4-1
+MISTRAL_EMBED_MODEL = "mistral-embed-2312"
 
 client = Mistral(api_key=MISTRAL_API_KEY)
 
@@ -37,7 +39,7 @@ class MistralEmbeddingFunction(EmbeddingFunction[Documents]):
         """
         Initialize the MistralEmbeddingFunction.
         """
-        self.model = "mistral-embed"
+        self.model = MISTRAL_EMBED_MODEL
         if not client:
             raise ValueError("Mistral client not initialized")
         self.client = client
@@ -99,7 +101,7 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
 
     try:
         response = client.ocr.process(
-            model="mistral-ocr-latest",
+            model=MISTRAL_OCR_MODEL,
             document={
                 "type": "document_url",
                 "document_url": f"data:application/pdf;base64,{encoded_file}",
