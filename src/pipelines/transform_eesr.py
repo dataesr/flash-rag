@@ -74,7 +74,7 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
     publication_epoch = to_unix_epoch(publication_date) if publication_date else 0
 
     file_id = page["PAGE_NOM_DE_CODE"].lower().replace("eesr", "")
-    page_url = publication_url + (page.get("PAGE_THEME_CODE") or "") + "/" + normalize_text(page["PAGE_TITRE_FR"], sep="_")
+    page_url = publication_url + (page.get("PAGE_THEME_CODE") or "") + "/" + normalize_text(page["PAGE_TITRE_FR"], sep="_") + "/"
     keywords = publication.get("PUBLICATION_THEMATIQUES", "").split(";")
 
     return {
