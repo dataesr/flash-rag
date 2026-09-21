@@ -8,6 +8,12 @@ build:
 	docker build -t $(GHCR_IMAGE_NAME):$(CURRENT_VERSION) -t $(GHCR_IMAGE_NAME):latest .
 	@echo "Docker image $(GHCR_IMAGE_NAME):$(CURRENT_VERSION) built successfully"
 
+test:
+	uv run python -m unittest discover -s tests -v
+
+check: test
+	uv run python -m compileall -q main.py src tests
+
 push:
 	@echo "Pushing Docker image $(GHCR_IMAGE_NAME):$(CURRENT_VERSION)"
 	docker push -a $(GHCR_IMAGE_NAME)
@@ -25,7 +31,7 @@ build-push:
 	@"$(MAKE)" build
 	@"$(MAKE)" push
 
-release:
+release: check
 ifndef VERSION
 	$(error VERSION is not defined. Use 'make release VERSION=x.y.z')
 endif

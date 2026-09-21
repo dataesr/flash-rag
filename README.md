@@ -96,10 +96,12 @@ curl -sS -X POST http://localhost:8000/query \
 
 - Build locally via `make build` (image tagged from `pyproject.toml` version).
 - Push with `make push` (pushes to configured registry).
+- Run the no-network smoke checks with `make check` before pushing or releasing.
+- Run only the test suite with `make test`.
 
 ## Release
 
-Tag and release using the `make release VERSION=X.Y.Z` helper; it updates `pyproject.toml` and creates a git tag.
+Tag and release using the `make release VERSION=X.Y.Z` helper; it runs `make check` first, then updates `pyproject.toml` and creates a git tag.
 
 ## Contributing
 
