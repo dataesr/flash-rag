@@ -46,7 +46,7 @@ def update(payload: UpdateRequest):
         if payload.task in ["all", "load"]:
             # load new documents
             if load_fnc:
-                logger.info(f"\n{'='*60}")
+                logger.info(f"{'='*60}")
                 logger.info(f"=== Loading {ref.upper()} documents ===")
                 logger.info(f"{'='*60}")
                 load_fnc(use_cache=payload.use_cache, use_fetch=payload.use_fetch, force_download=payload.force_download)
@@ -54,7 +54,7 @@ def update(payload: UpdateRequest):
         if payload.task in ["all", "extract"]:
             # extract documents (OCR)
             if extract_fnc:
-                logger.info(f"\n{'='*60}")
+                logger.info(f"{'='*60}")
                 logger.info(f"=== Extracting {ref.upper()} documents ===")
                 logger.info(f"{'='*60}")
                 extract_fnc(use_cache=payload.use_cache, force_ocr=payload.force_ocr)
@@ -62,14 +62,14 @@ def update(payload: UpdateRequest):
         if payload.task in ["transform"]:
             # transform documents (chunking)
             if transform_fnc:
-                logger.info(f"\n{'='*60}")
+                logger.info(f"{'='*60}")
                 logger.info(f"=== Chunking {ref.upper()} documents ===")
                 logger.info(f"{'='*60}")
                 transform_fnc(use_cache=payload.use_cache)
 
     if payload.task in ["all", "populate"]:
         # populate collection
-        logger.info(f"\n{'='*60}")
+        logger.info(f"{'='*60}")
         logger.info("=== Populating collection ===")
         logger.info(f"{'='*60}")
         populate(
@@ -79,7 +79,7 @@ def update(payload: UpdateRequest):
             override=payload.db_override,
         )
 
-    logger.info(f"\n{'='*60}")
+    logger.info(f"{'='*60}")
     logger.info("=== Update Complete ===")
     logger.info(f"{'='*60}\n")
 

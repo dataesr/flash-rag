@@ -6,14 +6,13 @@ from pydantic import BaseModel
 from src.query import query as run_query
 from src.update import update as run_update, UpdateRequest
 
-logging.basicConfig(
-    format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-    level=logging.DEBUG,
-)
-
-app = FastAPI(title="Flash Notes RAG API")
+logging.basicConfig(format="%(asctime)s | %(name)s | %(levelname)s | %(message)s", level=logging.DEBUG)
+for logger_name in ["httpx", "httpcore", "urllib3"]:
+    logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Flash Notes RAG API")
 
 class QueryRequest(BaseModel):
     query: str
