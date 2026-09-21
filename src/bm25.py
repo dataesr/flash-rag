@@ -1,9 +1,12 @@
 # BM25 config
-# To remove when BM25 supported by chromadb
+# To remove when BM25 supported natively by chromadb
 import os
 import re
 import logging
 import pickle
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet
 from typing import Any
 from rank_bm25 import BM25Okapi
 from src.chromadb import get_collection
@@ -12,17 +15,19 @@ logger = logging.getLogger(__name__)
 
 BM25_DIR = "./data/bm25"
 BM25_PATH = f"{BM25_DIR}/index.pkl"
+LEMMATIZER = WordNetLemmatizer()
 
 _bm25_index = None
 
 
-def build_search_text(document: str, metadata: dict[str, Any] | None = None) -> str:
-    """Create a BM25 search text that includes the main chunk content and some metadata signals."""
-    metadata = metadata or {}
-    title = str(metadata.get("title") or "")
-    publication_date = str(metadata.get("publication_date") or "")
-    parts = [title, document or "", publication_date]
-    return " ".join(str(part).strip() for part in parts if str(part).strip())
+def get_nltk_data():
+    """Download required NLTK data if not present"""
+    try:
+        nltk.data.find("corpora/wordnet")
+        nltk.data.find("taggers/averaged_perceptron_tagger")
+    except LookupError:
+        nltk.download("wordnet", quiet=True)
+        nltk.download("averaged_perceptron_tagger", quiet=True)
 
 
 def get_bm25_index():
@@ -46,12 +51,79 @@ def get_bm25_index():
     return _bm25_index if _bm25_index is not False else None
 
 
+def build_search_text(document: str, metadata: dict[str, Any] | None = None) -> str:
+    """Create a BM25 search text that includes the main chunk content and some metadata signals."""
+    metadata = metadata or {}
+    title = metadata.get("title", "") or ""
+    publication_date = metadata.get("publication_date", "") or ""
+    keywords = metadata.get("keywords", []) or []
+    parts = [title, document, publication_date] + keywords
+    return "\n".join(str(part).strip() for part in parts if str(part).strip())
+
+
+def get_wordnet_pos(treebank_tag):
+    """Convert treebank POS tag to WordNet POS tag"""
+    if treebank_tag.startswith("J"):
+        return wordnet.ADJ
+    elif treebank_tag.startswith("V"):
+        return wordnet.VERB
+    elif treebank_tag.startswith("N"):
+        return wordnet.NOUN
+    elif treebank_tag.startswith("R"):
+        return wordnet.ADV
+    else:
+        return wordnet.NOUN  # Default to noun
+
+
 def tokenize(text: str) -> list[str]:
     """
-    Tokenize text for BM25
+    Enhanced tokenizer with lemmatization support.
+
+    Features:
+    - Strips punctuation while preserving alphanumeric characters
+    - Converts to lowercase
+    - Lemmatizes words when NLTK is available
+    - Preserves part numbers, serial numbers, and other identifiers
     """
-    # TODO: better tokenization ?
-    return text.lower().split()
+
+    if not isinstance(text, str):
+        return []
+
+    # Extract alphanumeric tokens (preserves part numbers like "P123", "SN-456", etc.)
+    raw_tokens = re.findall(r"\b[a-zA-Z0-9]+\b", text.lower())
+
+    # Filter by length
+    filtered_tokens = [t for t in raw_tokens if 2 <= len(t) <= 50]
+
+    # Lemmatization with POS tagging for better accuracy
+    try:
+        pos_tags = nltk.pos_tag(filtered_tokens, lang="fra")
+
+        lemmatized_tokens = []
+        for token, pos_tag in pos_tags:
+            # Convert to alphanumeric-only tokens (numbers pass through unchanged)
+            if token.isdigit() or any(char.isdigit() for char in token):
+                lemmatized_tokens.append(token)
+            else:
+                wordnet_pos = get_wordnet_pos(pos_tag)
+                lemma = LEMMATIZER.lemmatize(token, pos=wordnet_pos)
+                lemmatized_tokens.append(lemma)
+
+        return lemmatized_tokens
+
+    except Exception:
+        # Fallback to simple lemmatization without POS
+        try:
+            lemmatized_tokens = []
+            for token in filtered_tokens:
+                if token.isdigit() or any(char.isdigit() for char in token):
+                    lemmatized_tokens.append(token)
+                else:
+                    lemma = LEMMATIZER.lemmatize(token)
+                    lemmatized_tokens.append(lemma)
+            return lemmatized_tokens
+        except Exception:
+            return filtered_tokens
 
 
 def build_bm25_index() -> bool:
