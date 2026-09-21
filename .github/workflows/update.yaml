@@ -1,0 +1,38 @@
+name: Update data
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+jobs:
+  update:
+    name: Trigger update via API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call update API endpoint
+        env:
+          DEPLOYMENT_URL: ${{ secrets.DEPLOYMENT_URL }}
+          FLASH_RAG_API_KEY: ${{ secrets.FLASH_RAG_API_KEY }}
+        run: |
+          DEPLOYMENT_URL="${DEPLOYMENT_URL:-https://flash-rag.staging.dataesr.ovh}"
+          response=$(curl -s -X POST "$DEPLOYMENT_URL/update" \
+            -H "Authorization: $FLASH_RAG_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "task": "all",
+              "reference": "all",
+              "use_cache": true,
+              "use_fetch": true,
+              "force_download": false,
+              "force_ocr": false,
+              "db_override": true,
+              "db_reset": false
+            }')
+          echo "Response: $response"
+          if echo "$response" | grep -q "accepted"; then
+            echo "Update triggered successfully"
+          else
+            echo "Failed to trigger update"
+            exit 1
+          fi
