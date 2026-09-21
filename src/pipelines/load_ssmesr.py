@@ -75,6 +75,7 @@ def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
         return existing
 
     all = pd.concat([existing, new])
+    all["modified"] = all["modified"].astype(str)
     merged = all.sort_values("modified").drop_duplicates(subset=["id", "title"], keep="last").reset_index(drop=True)
 
     logger.info(f"Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(existing)})")
