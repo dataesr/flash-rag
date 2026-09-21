@@ -1,9 +1,12 @@
-from src.bm25 import build_bm25_index
+import logging
 import argparse
 from typing import Any, Literal
 from src.chromadb import get_collection
+from src.bm25 import build_bm25_index
 from src.pipelines.transform_eesr import transform as transform_eesr
 from src.pipelines.transform_ssmesr import transform as transform_ssmesr
+
+logger = logging.getLogger(__name__)
 
 MAX_ITEMS_PER_BATCH = 5000
 
@@ -36,16 +39,16 @@ def populate(
     all_chunks = []
 
     if reference in ["all", "ssmesr"]:
-        print("[populate] Running SSMESR transform")
+        logger.info("Running SSMESR transform")
         ssmesr_chunks = transform_ssmesr(use_cache)
-        print(f"[populate] SSMESR chunks: {len(ssmesr_chunks)}")
+        logger.info(f"SSMESR chunks: {len(ssmesr_chunks)}")
         if len(ssmesr_chunks):
             all_chunks += ssmesr_chunks
 
     if reference in ["all", "eesr"]:
-        print("[populate] Running EESR transform")
+        logger.info("Running EESR transform")
         eesr_chunks = transform_eesr(use_cache)
-        print(f"[populate] EESR chunks: {len(eesr_chunks)}")
+        logger.info(f"EESR chunks: {len(eesr_chunks)}")
         if len(eesr_chunks):
             all_chunks += eesr_chunks
 
@@ -54,7 +57,7 @@ def populate(
         new_chunks = [chunk for chunk in all_chunks if chunk["id"] not in existing_ids]
 
     if not new_chunks:
-        print("[populate] No new chunks to ingest")
+        logger.info("No new chunks to ingest")
         return
 
     ids = [chunk["id"] for chunk in new_chunks]
@@ -63,14 +66,14 @@ def populate(
     batches = batch_chroma_payload(ids, documents, metadatas)
 
     for batch_index, (batch_ids, batch_documents, batch_metadatas) in enumerate(batches, start=1):
-        print(f"[populate] Writing batch {batch_index}/{len(batches)} ({len(batch_ids)} chunks) \
+        logger.debug(f"Writing batch {batch_index}/{len(batches)} ({len(batch_ids)} chunks) \
             into collection '{collection.name}'")
         if override:
             collection.upsert(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
         else:
             collection.add(ids=batch_ids, documents=batch_documents, metadatas=batch_metadatas)
 
-    print(f"[populate] Indexed {len(new_chunks)} chunks")
+    logger.info(f"Indexed {len(new_chunks)} chunks")
 
     if build_bm25:
         build_bm25_index()

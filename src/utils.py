@@ -1,34 +1,36 @@
 import os
 import json
+import logging
 import httpx
 import argparse
 import unicodedata
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
 
 def save_jsonl(data: list[dict] | dict | None, output_path: str):
     """Save a list of dicts as JSONL or dict as JSON"""
     if not data:
-        print("[save_jsonl] No data to save")
+        logger.debug("[save_jsonl] No data to save")
         return
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         if isinstance(data, dict):
             json.dump(data, f, ensure_ascii=False, indent=4)
-            print(f"[save_jsonl] Saved data to {output_path}")
+            logger.debug(f"[save_jsonl] Saved data to {output_path}")
         elif isinstance(data, list):
             for record in data:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            print(f"[save_jsonl] Saved {len(data)} records to {output_path}")
+            logger.debug(f"[save_jsonl] Saved {len(data)} records to {output_path}")
         else:
-            print(f"[save_jsonl] Unsupported type: {type(data)}")
+            logger.error(f"[save_jsonl] Unsupported type: {type(data)}")
 
 
 def load_jsonl(input_path: str) -> list[dict] | dict | None:
     """Load a list of dicts from a JSONL file or dict from a JSON file."""
     if not os.path.exists(input_path):
-        print(f"[load_jsonl] File not found: {input_path}")
+        logger.debug(f"[load_jsonl] File not found: {input_path}")
         return None
     if input_path.endswith(".jsonl"):
         with open(input_path, "r", encoding="utf-8") as f:
@@ -37,7 +39,7 @@ def load_jsonl(input_path: str) -> list[dict] | dict | None:
         with open(input_path, "r", encoding="utf-8") as f:
             return json.load(f)
     else:
-        print(f"[load_jsonl] Unsupported type: {input_path}")
+        logger.error(f"[load_jsonl] Unsupported type: {input_path}")
         return None
 
 
@@ -49,10 +51,10 @@ def fetch_data(url: str, timeout: int = 60) -> dict:
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as error:
-            print(f"[error] HTTP error while requesting {url}: {error}")
+            logger.error(f"[fetch-data] HTTP error while requesting {url}: {error}")
             raise error
         except Exception as error:
-            print(f"[error] An error occurred while requesting {url}: {error}")
+            logger.error(f"[fetch-data] An error occurred while requesting {url}: {error}")
             raise error
 
 
@@ -73,7 +75,7 @@ def to_unix_epoch(date_str: str) -> int:
         dt = datetime.fromisoformat(date_str)
         return int(dt.timestamp())
     except Exception as error:
-        print(f"[error] Failed to convert date string to Unix epoch: {error}")
+        logger.error(f"[unix] Failed to convert date string to Unix epoch: {error}")
         raise error
 
 

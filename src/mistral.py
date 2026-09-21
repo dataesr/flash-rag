@@ -1,6 +1,7 @@
 import os
 import base64
 import json
+import logging
 import numpy as np
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
@@ -13,6 +14,7 @@ from dotenv import load_dotenv
 MAX_DOCUMENTS_PER_BATCH = 8
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 MISTRAL_RAG_MODEL = "mistral-small-2603"
@@ -90,7 +92,7 @@ def encode_file(path: str) -> str | None:
         with open(path, "rb") as file:
             return base64.b64encode(file.read()).decode("utf-8")
     except Exception as error:
-        print(f"[error] Error while encoding {path}: {error}")
+        logger.error(f"Error while encoding {path}: {error}")
         return None
 
 
@@ -113,11 +115,11 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
         data = json.loads(response.model_dump_json())
         return data
     except json.JSONDecodeError as error:
-        print(f"[error] Error while decoding json response: {error}")
-        print(f"[debug] response: {response}")
+        logger.error(f"Error while decoding json response: {error}")
+        logger.debug(f"response: {response}")
         return None
     except Exception as error:
-        print(f"[error] Error while processing {document_name}: {error}")
+        logger.error(f"Error while processing {document_name}: {error}")
         return None
 
 
@@ -177,7 +179,7 @@ def build_user_prompt(query: str, documents: list[dict]) -> str:
 
 def mistral_rag_answer(query_text: str, documents: list[dict]) -> RagAnswer:
     user_prompt = build_user_prompt(query_text, documents)
-    # print(f"[debug] User prompt:\n{user_prompt}")
+    # logger.debug(f"User prompt:\n{user_prompt}")
 
     chat_response = client.chat.parse(
         model=MISTRAL_RAG_MODEL,

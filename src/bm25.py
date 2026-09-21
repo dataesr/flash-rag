@@ -2,10 +2,13 @@
 # To remove when BM25 supported by chromadb
 import os
 import re
+import logging
 import pickle
 from typing import Any
 from rank_bm25 import BM25Okapi
 from src.chromadb import get_collection
+
+logger = logging.getLogger(__name__)
 
 BM25_DIR = "./data/bm25"
 BM25_PATH = f"{BM25_DIR}/index.pkl"
@@ -29,15 +32,15 @@ def get_bm25_index():
         try:
             # Try to load persisted index
             if os.path.exists(BM25_PATH):
-                print(f"[bm25] Loading BM25 index from {BM25_PATH}")
+                logger.debug(f"Loading BM25 index from {BM25_PATH}")
                 with open(BM25_PATH, "rb") as f:
                     _bm25_index = pickle.load(f)
-                print("[bm25] BM25 index loaded successfully")
+                logger.info("BM25 index loaded successfully")
             else:
-                print(f"[bm25] BM25 index not found at {BM25_PATH}. Run build_bm25_index() first.")
+                logger.info(f"BM25 index not found at {BM25_PATH}. Run build_bm25_index() first.")
                 _bm25_index = False  # Flag to skip
         except Exception as error:
-            print(f"[error] Failed to load BM25 index: {error}. Continuing with vector-only search.")
+            logger.error(f"Failed to load BM25 index: {error}. Continuing with vector-only search.")
             _bm25_index = False
 
     return _bm25_index if _bm25_index is not False else None
@@ -65,7 +68,7 @@ def build_bm25_index() -> bool:
     """
 
     os.makedirs(BM25_DIR, exist_ok=True)
-    print("[bm25] Building BM25 index from ChromaDB collection...")
+    logger.info("Building BM25 index from ChromaDB collection...")
 
     collection = get_collection()
 
@@ -75,7 +78,7 @@ def build_bm25_index() -> bool:
     documents = results["documents"] or []
     metadatas = results["metadatas"] or []
 
-    print(f"[bm25] Indexing {len(documents)} documents")
+    logger.info(f"Indexing {len(documents)} documents")
 
     enriched_documents = [
         build_search_text(document, metadata)  # ty: ignore[invalid-argument-type]
@@ -93,7 +96,7 @@ def build_bm25_index() -> bool:
     with open(BM25_PATH, "wb") as f:
         pickle.dump(index, f)
 
-    print(f"[bm25] Index saved to {BM25_PATH}")
+    logger.info(f"Index saved to {BM25_PATH}")
 
     # Clear global to reload new index
     global _bm25_index
@@ -143,11 +146,11 @@ def bm25_search(query: str, k: int = 20) -> list[dict]:
                     "bm25_score": score,
                 }
             )
-        print(f"[bm25] BM25 search returned {len(results)} results")
+        logger.debug(f"BM25 search returned {len(results)} results")
         return results
 
     except Exception as error:
-        print(f"[error] BM25 search failed: {error}")
+        logger.error(f"[error] BM25 search failed: {error}")
         return []
 
 

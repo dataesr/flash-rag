@@ -1,5 +1,5 @@
-from src.mistral import mistral_rag_answer, RagCitation
 import re
+import logging
 import argparse
 from time import perf_counter
 from typing import Literal, Any
@@ -7,6 +7,9 @@ from datetime import datetime
 from src.utils import parse_key_value_pair
 from src.chromadb import get_collection
 from src.bm25 import bm25_search, rrf_fusion
+from src.mistral import mistral_rag_answer, RagCitation
+
+logger = logging.getLogger(__name__)
 
 CURRENT_DATE = datetime.now()
 CURRENT_YEAR = CURRENT_DATE.year
@@ -104,19 +107,19 @@ def query(
             elif len(keywords) > 1:
                 where_filter["$and"].append({"$or": [{key: {"$contains": k}} for k in keywords]})
         else:
-            print(f"[warning] filter {key}={value} skipped")
+            logger.warning(f"Query filter {key}={value} skipped")
 
     # Retrieve more candidates than the final k because
     # RRF + reranking need a larger candidate pool
     retrieval_k = min(k * K_MULTIPLIER, MAX_K) if (use_hybrid_search or use_reranker) else k
 
-    print(f"[search] k={k}, retrieval_k={retrieval_k}, " f"hybrid={use_hybrid_search}, reranker={use_reranker}")
+    logger.debug(f"Search with k={k}, retrieval_k={retrieval_k}, " f"hybrid={use_hybrid_search}, reranker={use_reranker}")
 
     # ========== DENSE SEARCH (Vector/Mistral) ==========
-    print(f"[search] Dense search: retrieving top {retrieval_k}")
+    logger.debug(f"Dense search: retrieving top {retrieval_k}")
     stage_started = perf_counter()
     dense_results = collection.query(query_texts=[query_text], n_results=retrieval_k, where=where_filter)
-    print(f"[timing] dense search + embedding: {perf_counter() - stage_started:.3f}s")
+    logger.debug(f"[timing] dense search + embedding: {perf_counter() - stage_started:.3f}s")
 
     ids = dense_results["ids"][0]
     documents = (dense_results.get("documents") or [[]])[0]
@@ -136,22 +139,22 @@ def query(
 
     # ========== HYBRID SEARCH: BM25 Fusion ==========
     if use_hybrid_search:
-        print("[search] Running BM25 sparse search")
+        logger.debug("Running BM25 sparse search")
         stage_started = perf_counter()
         bm25_sources = bm25_search(query_text, k=retrieval_k)
-        print(f"[timing] BM25 search: {perf_counter() - stage_started:.3f}s")
+        logger.debug(f"[timing] BM25 search: {perf_counter() - stage_started:.3f}s")
 
         # Fuse dense + sparse via RRF
         stage_started = perf_counter()
         sources = rrf_fusion(sources, bm25_sources)
-        print(f"[search] After RRF fusion: {len(sources)} results")
-        print(f"[timing] RRF fusion: {perf_counter() - stage_started:.3f}s")
+        logger.debug(f"After RRF fusion: {len(sources)} results")
+        logger.debug(f"[timing] RRF fusion: {perf_counter() - stage_started:.3f}s")
 
     # ========== RERANKING ==========
     if use_reranker and sources:
         stage_started = perf_counter()
         sources = lightweight_rerank(query_text, sources)
-        print(f"[timing] reranking: {perf_counter() - stage_started:.3f}s")
+        logger.debug(f"[timing] reranking: {perf_counter() - stage_started:.3f}s")
 
     # Keep only top-k final results
     sources = sources[:k]
@@ -164,10 +167,10 @@ def query(
         rag_answer = mistral_rag_answer(query_text, documents=sources)
         answer = rag_answer.answer
         citations = rag_answer.citations
-        print(f"[timing] mistral answer: {perf_counter() - answer_started}")
-        print(f"[debug] citations = {citations}")
+        logger.debug(f"[timing] mistral answer: {perf_counter() - answer_started}")
+        logger.debug(f"Mistral citations = {citations}")
 
-    print(f"[timing] total query: {perf_counter() - query_started:.3f}s")
+    logger.debug(f"[timing] total query: {perf_counter() - query_started:.3f}s")
     return sources, answer, citations
 
 

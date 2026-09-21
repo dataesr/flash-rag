@@ -1,10 +1,13 @@
 import os
 import re
+import logging
 import argparse
 import pandas as pd
 from src.mistral import mistral_ocr
 from src.utils import save_jsonl, load_jsonl
 from src.pipelines.load_ssmesr import get_records, get_files
+
+logger = logging.getLogger(__name__)
 
 
 def parse_table(md: str) -> dict | None:
@@ -84,33 +87,33 @@ def parse_one_ocr(file: pd.Series, use_cache: bool = True) -> pd.Series:
 
     # Only pdf
     if not file_format == "pdf":
-        print(f"[parse-ssmesr] Skipping {file_name} ({file_format=})")
+        logger.debug(f"Skipping {file_name} ({file_format=})")
         results["file"] = "skipped"
         return results
 
     if not ocr_path:
-        print(f"[parse-ssmesr] No ocr_path found for {file_name} ({file_path=})")
+        logger.debug(f"No ocr_path found for {file_name} ({file_path=})")
         return results
 
     ocr_data = load_jsonl(ocr_path)
     if not ocr_data:
-        print(f"[parse-ssmesr] No data found in {ocr_path}")
+        logger.debug(f"No data found in {ocr_path}")
         return results
 
     if not isinstance(ocr_data, dict):
-        print(f"[parse-ssmesr] Invalid data type in {ocr_path} ({type(ocr_data)=})")
+        logger.debug(f"Invalid data type in {ocr_path} ({type(ocr_data)=})")
         return results
 
     ocr_pages = ocr_data.get("pages")
     if not ocr_pages:
-        print(f"[parse-ssmesr] No pages found in {ocr_path}")
+        logger.debug(f"No pages found in {ocr_path}")
         return results
 
     if not isinstance(ocr_pages, list):
-        print(f"[parse-ssmesr] Invalid data type in {ocr_path} ({type(ocr_pages)=})")
+        logger.debug(f"Invalid data type in {ocr_path} ({type(ocr_pages)=})")
         return results
 
-    # print(f"[debug] ocr_pages: {len(ocr_pages)}")
+    # logger.debug(f"[debug] ocr_pages: {len(ocr_pages)}")
     results["total"] = len(ocr_pages)
 
     for page in ocr_pages:
@@ -122,7 +125,7 @@ def parse_one_ocr(file: pd.Series, use_cache: bool = True) -> pd.Series:
             continue
 
         if not md:
-            print(f"[parse-ssmesr] No markdown found in page {page['index']} of {ocr_path}")
+            logger.debug(f"No markdown found in page {page['index']} of {ocr_path}")
             results["empty"] += 1
             continue
 
@@ -134,7 +137,7 @@ def parse_one_ocr(file: pd.Series, use_cache: bool = True) -> pd.Series:
             else:
                 results["empty"] += 1
         except Exception as error:
-            print(f"[error] Failed to parse page {page['index']} of {ocr_path}: {error}")
+            logger.error(f"Failed to parse page {page['index']} of {ocr_path}: {error}")
             results["failed"] += 1
             continue
 
@@ -152,8 +155,10 @@ def parse_one_ocr(file: pd.Series, use_cache: bool = True) -> pd.Series:
 
 def parse_ocr(files: pd.DataFrame, use_cache: bool = True):
     if not len(files):
-        print("[parse-ssmesr] Found 0 files to parse")
+        logger.info("Found 0 files to parse")
         return
+
+    logger.info(f"Found {len(files)} files to parse")
 
     # Parse pdf files
     stats = files.apply(parse_one_ocr, use_cache=use_cache, axis=1)
@@ -164,8 +169,8 @@ def parse_ocr(files: pd.DataFrame, use_cache: bool = True):
     failed = int(stats["failed"].sum())
     empty = int(stats["empty"].sum())
     total = int(stats["total"].sum())
-    print(f"[parse-ssmesr] Parsed {len(files)} files")
-    print(f"[parse-ssmesr] Parsed {parsed}/{total} pages ({skipped=}, {failed=}, {empty=})")
+    logger.info(f"Parsed {len(files)} files")
+    logger.info(f"Parsed {parsed}/{total} pages ({skipped=}, {failed=}, {empty=})")
 
 
 def extract_one(file: pd.Series, use_cache: bool = True) -> str:
@@ -184,22 +189,23 @@ def extract_one(file: pd.Series, use_cache: bool = True) -> str:
         save_jsonl(data, ocr_path)
         return "extracted"
     except Exception as error:
-        print(f"[error] Failed to extract {file_name}: {error}")
-        print(f"[debug] {ocr_path=}, {file_path=}")
+        logger.error(f"Failed to extract {file_name}: {error}")
+        logger.debug(f"{ocr_path=}, {file_path=}")
         return "failed"
 
 
 def extract_pdf(files: pd.DataFrame, force_ocr: bool = False):
     if not len(files):
-        print("[extract-ssmesr] Found 0 files to extract")
+        logger.info("Found 0 files to extract")
         return
 
     pdfs = files[files["file_format"].isin(["pdf"])]
-    print(f"[extract-ssmesr] Found {len(pdfs)} pdf from {len(files)} files")
 
     if not len(pdfs):
-        print(f"[extract-ssmesr] Found 0 pdf files from {len(files)} files to extract")
+        logger.info(f"Found 0 pdf files from {len(files)} files to extract")
         return
+
+    logger.info(f"Found {len(pdfs)} pdf from {len(files)} files")
 
     # Extract pdf files
     stats = pdfs.apply(extract_one, use_cache=not force_ocr, axis=1)
@@ -210,21 +216,21 @@ def extract_pdf(files: pd.DataFrame, force_ocr: bool = False):
     skipped = int(stats_counts.get("skipped", 0))
     failed = int(stats_counts.get("failed", 0))
 
-    print(f"[extract-ssmesr] Extracted {extracted}/{len(pdfs)} pdf files ({skipped=}, {failed=})")
+    logger.info(f"Extracted {extracted}/{len(pdfs)} pdf files ({skipped=}, {failed=})")
 
 
 def extract(use_cache: bool = True, force_ocr: bool = False):
     # Get records
-    print("[warn] Only 'article' publications will be extracted")
+    logger.warning("Only 'article' publications will be extracted")
     records = get_records()
     records = records[records["metadata"].apply(lambda x: x.get("resource_type", {}).get("subtype") == "article")]
-    print(f"[extract-ssmesr] Found {len(records)} 'article' records")
+    logger.info(f"Found {len(records)} 'article' records")
 
     # Get files from records
     files = get_files(records)
 
     # Extract pdf files
-    print("[warn] Only pdf files will be extracted")
+    logger.warning("Only pdf files will be extracted")
     extract_pdf(files, force_ocr=force_ocr)
 
     # Parse ocr results

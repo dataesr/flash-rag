@@ -1,9 +1,12 @@
 import os
+import logging
 import argparse
 from typing import Any
 import pandas as pd
 from src.pipelines.load_eesr import get_pages
 from src.utils import save_jsonl, to_unix_epoch, normalize_text
+
+logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = "./data"
 OUTPUT_CHUNKS = f"{OUTPUT_DIR}/eesr_chunks.jsonl"
@@ -27,6 +30,7 @@ EESR_KEYWORDS = [
     "Insertion professionnelle",
     "Publications scientifiques",
 ]
+
 
 def parse_illustration(illustration: dict) -> tuple[str, str, str]:
     """
@@ -107,11 +111,11 @@ def build_page_text(page: dict[str, Any]) -> str:
             parts.append(value.strip())
         else:
             if field == "PAGE_TEXTE_FR":
-                print(f"[warn] No PAGE_TEXTE_FR found for page {page['PAGE_NOM_DE_CODE']} ({page.get('PAGE_TITRE_FR')})")
+                logger.warning(f"No PAGE_TEXTE_FR found for page {page['PAGE_NOM_DE_CODE']} ({page.get('PAGE_TITRE_FR')})")
                 return ""  # Skip pages without main text
 
     if not parts:
-        print(f"[error] No content found for page {page['PAGE_NOM_DE_CODE']}")
+        logger.error(f"No content found for page {page['PAGE_NOM_DE_CODE']}")
         return ""
 
     return "\n\n".join(parts)
@@ -206,16 +210,16 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
 
 def transform(use_cache: bool = True) -> list[dict[str, Any]]:
     if use_cache and os.path.exists(OUTPUT_CHUNKS):
-        print(f"[transform-eesr] Chunks already exist in {OUTPUT_CHUNKS}, skipping")
+        logger.info(f"Chunks already exist in {OUTPUT_CHUNKS}, skipping")
         return pd.read_json(OUTPUT_CHUNKS, lines=True, encoding="utf-8").to_dict(orient="records")
 
     pages = get_pages()
     if pages.empty:
-        print("[transform-eesr] No EESR pages found")
+        logger.info("No EESR pages found")
         return []
 
     # Skip annexes, resumes, and other non-content pages based on PAGE_COURANTE_ID
-    print(f"[warn] Skipping pages PAGE_COURANTE_ID <= 1 (annexes, resumes, etc.)")
+    logger.warning(f"Skipping pages PAGE_COURANTE_ID <= 1 (annexes, resumes, etc.)")
     pages = pages[pages["PAGE_COURANTE_ID"] > 1]
 
     chunks: list[dict[str, Any]] = []
@@ -223,9 +227,9 @@ def transform(use_cache: bool = True) -> list[dict[str, Any]]:
         page = row.to_dict()
         chunks.extend(page_to_chunks(page))
 
-    print(f"[transform-eesr] Generated {len(chunks)} EESR chunks")
-    print(f"  - Paragraphs: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'paragraph')}")
-    print(f"  - Tables: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'table')}")
+    logger.info(f"Generated {len(chunks)} EESR chunks")
+    logger.info(f"  - Paragraphs: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'paragraph')}")
+    logger.info(f"  - Tables: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'table')}")
 
     save_jsonl(chunks, OUTPUT_CHUNKS)
     return chunks

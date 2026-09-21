@@ -1,3 +1,4 @@
+import logging
 import argparse
 from typing import Literal
 from pydantic import BaseModel
@@ -7,6 +8,8 @@ from src.pipelines.extract_ssmesr import extract as extract_ssmesr
 from src.pipelines.transform_ssmesr import transform as transform_ssmesr
 from src.pipelines.transform_eesr import transform as transform_eesr
 from src.populate import populate
+
+logger = logging.getLogger(__name__)
 
 REFERENCES = ["ssmesr", "eesr"]
 LOAD_FNC = {
@@ -43,32 +46,32 @@ def update(payload: UpdateRequest):
         if payload.task in ["all", "load"]:
             # load new documents
             if load_fnc:
-                print(f"\n{'='*60}")
-                print(f"=== Loading {ref.upper()} documents ===")
-                print(f"{'='*60}")
+                logger.info(f"\n{'='*60}")
+                logger.info(f"=== Loading {ref.upper()} documents ===")
+                logger.info(f"{'='*60}")
                 load_fnc(use_cache=payload.use_cache, use_fetch=payload.use_fetch, force_download=payload.force_download)
 
         if payload.task in ["all", "extract"]:
             # extract documents (OCR)
             if extract_fnc:
-                print(f"\n{'='*60}")
-                print(f"=== Extracting {ref.upper()} documents ===")
-                print(f"{'='*60}")
+                logger.info(f"\n{'='*60}")
+                logger.info(f"=== Extracting {ref.upper()} documents ===")
+                logger.info(f"{'='*60}")
                 extract_fnc(use_cache=payload.use_cache, force_ocr=payload.force_ocr)
 
         if payload.task in ["transform"]:
             # transform documents (chunking)
             if transform_fnc:
-                print(f"\n{'='*60}")
-                print(f"=== Chunking {ref.upper()} documents ===")
-                print(f"{'='*60}")
+                logger.info(f"\n{'='*60}")
+                logger.info(f"=== Chunking {ref.upper()} documents ===")
+                logger.info(f"{'='*60}")
                 transform_fnc(use_cache=payload.use_cache)
 
     if payload.task in ["all", "populate"]:
         # populate collection
-        print(f"\n{'='*60}")
-        print("=== Populating collection ===")
-        print(f"{'='*60}")
+        logger.info(f"\n{'='*60}")
+        logger.info("=== Populating collection ===")
+        logger.info(f"{'='*60}")
         populate(
             reference=payload.reference,
             use_cache=payload.use_cache,
@@ -76,9 +79,9 @@ def update(payload: UpdateRequest):
             override=payload.db_override,
         )
 
-    print(f"\n{'='*60}")
-    print("=== Update Complete ===")
-    print(f"{'='*60}\n")
+    logger.info(f"\n{'='*60}")
+    logger.info("=== Update Complete ===")
+    logger.info(f"{'='*60}\n")
 
 
 def update_cli():

@@ -1,9 +1,12 @@
 import os
 import time
+import logging
 import httpx
 import argparse
 import pandas as pd
 from src.utils import fetch_data, download_file
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://zenodo.org/api/records?communities=ssm-esr&size=25&page=1"
 OUTPUT_DIR = "./data"
@@ -26,24 +29,24 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
     while url:
         page += 1
 
-        print(f"[load-ssmesr] Fetching page {page}: {url}")
+        logger.debug(f"Fetching page {page}: {url}")
         try:
             data = fetch_data(url, timeout=120)
             request_count += 1
 
             hits = data.get("hits", {}).get("hits", [])
             all_records.extend(hits)
-            print(f"[load-ssmesr]  → Got {len(hits)} hits (total: {len(all_records)})")
+            logger.debug(f"  → Got {len(hits)} hits (total: {len(all_records)})")
             url = data.get("links", {}).get("next")
         except httpx.HTTPStatusError as error:
             status = error.response.status_code
             if status == 429:
                 wait = 5
                 page -= 1  # retry current page
-                print(f"[load-ssmesr] Rate limit reached ({request_count} req). Waiting {wait:.1f}s...")
+                logger.warning(f"Rate limit reached ({request_count} req). Waiting {wait:.1f}s...")
                 time.sleep(wait)
             elif status == 422:
-                print(f"[load-ssmesr] Unprocessable request for {url}, skipping.")
+                logger.error(f"Unprocessable request for {url}, skipping.")
                 raise error
             else:
                 raise
@@ -55,36 +58,36 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
 def get_records() -> pd.DataFrame:
     if os.path.exists(OUTPUT_RECORDS):
         records = pd.read_json(OUTPUT_RECORDS, lines=True, encoding="utf-8")
-        print(f"[load-ssmesr] Found {len(records)} existing records")
+        logger.info(f"Found {len(records)} existing records")
         return records
-    print("[load-ssmesr] No existing records found")
+    logger.info("No existing records found")
     return pd.DataFrame()
 
 
 def merge_records(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     if len(existing) == 0 and len(new) == 0:
-        raise ValueError("[load-ssmesr] No existing nor new records found")
+        raise ValueError("No existing nor new records found")
     if len(existing) == 0:
-        print(f"[load-ssmesr] No existing records found -- using new {len(new)} records")
+        logger.info(f"No existing records found -- using new {len(new)} records")
         return new
     if len(new) == 0:
-        print(f"[load-ssmesr] No new records found -- continue with existing {len(existing)} records")
+        logger.info(f"No new records found -- continue with existing {len(existing)} records")
         return existing
 
     all = pd.concat([existing, new])
     merged = all.sort_values("modified").drop_duplicates(subset=["id", "title"], keep="last").reset_index(drop=True)
 
-    print(f"[load-ssmesr] Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(existing)})")
+    logger.info(f"Merged records: {len(merged)} (existing={len(existing)}, new={len(merged) - len(existing)})")
     return merged
 
 
 def get_files(records: pd.DataFrame) -> pd.DataFrame:
     if not len(records):
-        print("[load-ssmesr] Records dataframe is empty")
+        logger.info("Records dataframe is empty")
         return pd.DataFrame()
 
     if "files" not in records.columns:
-        print("[load-ssmesr] No column 'files' found on records dataframe")
+        logger.info("No column 'files' found on records dataframe")
         return pd.DataFrame()
 
     # Explode df on files column
@@ -121,10 +124,10 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
         files = files.drop_duplicates(subset=["file_name", "title"], keep="last").reset_index(drop=True)
 
     except Exception as error:
-        print(f"[error] Error while exploding files: {error}")
+        logger.error(f"Error while exploding files: {error}")
         raise error
 
-    print(f"[load-ssmesr] Found {len(files)} files from {len(records)} records")
+    logger.info(f"Found {len(files)} files from {len(records)} records")
     return files
 
 
@@ -143,15 +146,15 @@ def download_one_file(file: pd.Series, use_cache: bool = True) -> str:
         download_file(url, path)
         return "downloaded"
     except Exception as error:
-        print(f"[error] Failed to download {name}: {error}")
-        print(f"[debug] {url=}, {path=}")
+        logger.error(f"Failed to download {name}: {error}")
+        logger.debug(f"{url=}, {path=}")
         return "failed"
 
 
 def download_files(records: pd.DataFrame, use_cache: bool = True, formats: list[str] = []):
     total_records = len(records)
 
-    print(f"[load-ssmesr] Starting to download files from {total_records} records")
+    logger.info(f"Starting to download files from {total_records} records")
 
     # Get files from records
     files = get_files(records)
@@ -159,7 +162,7 @@ def download_files(records: pd.DataFrame, use_cache: bool = True, formats: list[
         files = files[files["file_format"].isin(formats)]
 
     if not len(files):
-        print(f"[load-ssmesr] Found 0 files from {len(records)} records to download")
+        logger.info(f"Found 0 files from {len(records)} records to download")
         return
 
     # Download files
@@ -171,7 +174,7 @@ def download_files(records: pd.DataFrame, use_cache: bool = True, formats: list[
     skipped = int(stats_counts.get("skipped", 0))
     failed = int(stats_counts.get("failed", 0))
 
-    print(f"[load-ssmesr] Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
+    logger.info(f"Downloaded {downloaded}/{len(files)} files ({skipped=}, {failed=})")
 
 
 def load(use_cache: bool = True, use_fetch: bool = True, force_download: bool = False):
@@ -194,7 +197,7 @@ def load(use_cache: bool = True, use_fetch: bool = True, force_download: bool = 
 
     # Save records
     records.to_json(OUTPUT_RECORDS, orient="records", lines=True)
-    print(f"[load-ssmesr] Saved {len(records)} records to {OUTPUT_RECORDS}")
+    logger.info(f"Saved {len(records)} records to {OUTPUT_RECORDS}")
 
 
 def load_cli():

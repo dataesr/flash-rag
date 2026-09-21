@@ -1,9 +1,12 @@
 import os
 import json
+import logging
 import argparse
 import pandas as pd
 from src.pipelines.load_ssmesr import OCR_DIR, get_records, get_files
 from src.utils import save_jsonl, to_unix_epoch
+
+logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = "./data"
 OUTPUT_CHUNKS = f"{OUTPUT_DIR}/ssmesr_chunks.jsonl"
@@ -48,7 +51,7 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
         with open(ocr_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception as error:
-        print(f"[transform_ssmesr] Error loading {ocr_path}: {error}")
+        logger.error(f"Error loading {ocr_path}: {error}")
         return []
 
     pages = data.get("pages", [])
@@ -89,7 +92,7 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                     current_chunks.append(current_doc)
 
                 # if len(current_chunks) > 1:
-                #     print(
+                #     logger.debug(
                 #         f"[transform_ssmesr] {file_name}: page={section_index}, section={page_index} --> {len(current_chunks)} paragraph chunks"
                 #     )
 
@@ -112,18 +115,18 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
             # ========== TABLES ==========
             if tables:
-                # print(f"[transform_ssmesr] {file_id}: page={page_index}, section={section_index} --> {len(tables)} table(s)")
+                # logger.debug(f"[transform_ssmesr] {file_id}: page={page_index}, section={section_index} --> {len(tables)} table(s)")
 
                 for table_index, table in enumerate(tables, start=1):
                     if not isinstance(table, dict):
-                        print(f"[warn] Empty table found for document {file_name} ({ocr_path})")
+                        logger.warning(f"Empty table found for document {file_name} ({ocr_path})")
                         continue
 
                     # Convert table to searchable markdown
                     markdown_table, csv_table, headers_text = parse_table(table)
 
                     if not markdown_table:
-                        print(f"[warn] No markdown table for document {file_name} ({ocr_path})")
+                        logger.warning(f"No markdown table for document {file_name} ({ocr_path})")
                         continue
 
                     chunks.append(
@@ -170,22 +173,22 @@ def build_document_metadata(file: pd.Series) -> dict:
 
 def transform(use_cache: bool = True) -> list[dict]:
     if use_cache and os.path.exists(OUTPUT_CHUNKS):
-        print(f"[transform_ssmesr] Chunks already exist in {OUTPUT_CHUNKS}, skipping")
+        logger.info(f"Chunks already exist in {OUTPUT_CHUNKS}, skipping")
         return pd.read_json(OUTPUT_CHUNKS, lines=True, encoding="utf-8").to_dict(orient="records")
 
     records = get_records()
     if records.empty:
-        print("[transform_ssmesr] No SSMESR records found")
+        logger.info("No SSMESR records found")
         return []
 
     # Get files
     files = get_files(records)
     if files.empty:
-        print("[transform_ssmesr] No SSMESR files found")
+        logger.info("No SSMESR files found")
         return []
 
     files_with_ocr = files[files["ocr_path"].apply(os.path.exists)]
-    print(f"[transform_ssmesr] Found {len(files_with_ocr)} files with OCR")
+    logger.info(f"Found {len(files_with_ocr)} files with OCR")
     if files_with_ocr.empty:
         return []
 
@@ -194,9 +197,9 @@ def transform(use_cache: bool = True) -> list[dict]:
         metadata = build_document_metadata(file)
         chunks.extend(chunk_document(file["ocr_path"], metadata))
 
-    print(f"[transform_ssmesr] Generated {len(chunks)} SSMESR chunks")
-    print(f"  - Paragraphs: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'paragraph')}")
-    print(f"  - Tables: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'table')}")
+    logger.info(f"Generated {len(chunks)} SSMESR chunks")
+    logger.info(f"  - Paragraphs: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'paragraph')}")
+    logger.info(f"  - Tables: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'table')}")
 
     save_jsonl(chunks, OUTPUT_CHUNKS)
     return chunks

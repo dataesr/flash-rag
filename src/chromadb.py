@@ -1,3 +1,4 @@
+import logging
 from chromadb.utils.embedding_functions import ChromaBm25EmbeddingFunction
 from chromadb.api import ClientAPI
 from chromadb import (
@@ -12,14 +13,16 @@ from chromadb import (
 # from chromadb.utils.embedding_functions import ChromaBm25EmbeddingFunction
 from src.mistral import MistralEmbeddingFunction
 
+logger = logging.getLogger(__name__)
+
 DB_DIR = "./data/db"
 COLLECTION_NAME = "flash-notes"
 
 
 def get_client() -> ClientAPI:
-    print(f"[chromadb] Initializing ChromaDB at {DB_DIR}")
+    logger.info(f"[chromadb] Initializing ChromaDB at {DB_DIR}")
     client = PersistentClient(path=DB_DIR)
-    print(f"[chromadb] Collections: {', '.join([f'{c.name} ({c.count()})' for c in client.list_collections()])}")
+    logger.info(f"[chromadb] Collections: {', '.join([f'{c.name} ({c.count()})' for c in client.list_collections()])}")
     return client
 
 
@@ -55,7 +58,7 @@ def build_schema():
 
 def get_collection(reset: bool = False) -> Collection:
     if reset:
-        print(f"[chromadb] Resetting collection '{COLLECTION_NAME}'")
+        logger.info(f"[chromadb] Resetting collection '{COLLECTION_NAME}'")
         try:
             client.delete_collection(name=COLLECTION_NAME)
         except Exception:
@@ -65,5 +68,5 @@ def get_collection(reset: bool = False) -> Collection:
         name=COLLECTION_NAME,
         schema=build_schema(),
     )
-    print(f"[chromadb] Collection '{COLLECTION_NAME}' ready (count={collection.count()})")
+    logger.info(f"[chromadb] Collection '{COLLECTION_NAME}' ready (count={collection.count()})")
     return collection
