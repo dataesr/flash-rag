@@ -1,13 +1,17 @@
+import os
+import httpx
 import re
 import logging
 import argparse
 from time import perf_counter
 from typing import Literal, Any
 from datetime import datetime
-from src.utils import parse_key_value_pair
+from chromadb.types import Where
+from src.utils import parse_key_value_pair, fetch_data
 from src.chromadb import get_collection
 from src.bm25 import bm25_search, rrf_fusion
 from src.mistral import mistral_rag_answer, RagCitation
+from src.rerank import rerank
 
 logger = logging.getLogger(__name__)
 
@@ -19,48 +23,11 @@ MAX_K = 50  # Max docs to retrieves
 K_MULTIPLIER = 5  # Multiplier for candidate retrieval before RRF and reranking
 
 
-def lightweight_rerank(query_text: str, sources: list[dict]) -> list[dict]:
-    """
-    Rerank ChromaDB results by combining:
-    1. Semantic score (from ChromaDB)
-    2. Title relevance (keyword overlap)
-    3. Temporal proximity (year matching/recency bias)
-    """
-
-    # Parse query
-    query_lower = query_text.lower().strip()
-    query_words = set(query_lower.split())
-    query_years = {int(year) for year in re.findall(r"\b(20\d{2})\b", query_lower)}
-
-    for source in sources:
-        semantic_score = 1 - source["distance"]
-
-        # Title relevance: how much query keywords overlap with title
-        title_words = set(source["metadata"]["title"].lower().split())
-        title_score = len(title_words & query_words) / max(1, len(title_words))
-
-        # Temporal: does doc year match query years?
-        publication_epoch = source["metadata"]["publication_epoch"]
-        temporal_score = 0.0
-        if query_years:
-            min_year = min(query_years)
-            min_epoch = datetime(min_year, 1, 1).timestamp()
-            if publication_epoch >= min_epoch:
-                # max_epoch = CURRENT_DATE.timestamp()
-                # temporal_score = min(1.5, 1.0 + 0.5 * ((publication_epoch - min_epoch) / (max_epoch - min_epoch)))
-                temporal_score = 1.0
-
-        # Combine with weights
-        final_score = 0.85 * semantic_score + 0.05 * title_score + 0.1 * temporal_score
-        source["rerank_score"] = final_score
-
-    return sorted(sources, key=lambda x: x["rerank_score"], reverse=True)
-
-
 def query(
     query_text: str,
     k: int = 5,
     use_reranker: bool = False,
+    use_cross_encoder: bool = False,
     use_hybrid_search: bool = False,
     use_mistral: bool = False,
     filters: dict[str, str | list[str]] = {},
@@ -88,7 +55,7 @@ def query(
     collection = get_collection()
 
     # Build filters
-    where_filter: dict[str, list] = {
+    where_filter: Where = {
         "$and": [
             {"publication_epoch": {"$gte": MAX_TIMESTAMP}},
             {"chunk_len": {"$gte": MIN_CHUNK_LEN}},
@@ -151,15 +118,15 @@ def query(
         logger.debug(f"[timing] RRF fusion: {perf_counter() - stage_started:.3f}s")
 
     # ========== RERANKING ==========
-    if use_reranker and sources:
+    if (use_reranker or use_cross_encoder) and sources:
         stage_started = perf_counter()
-        sources = lightweight_rerank(query_text, sources)
+        sources = rerank(query_text, sources, use_cross_encoder=use_cross_encoder)
         logger.debug(f"[timing] reranking: {perf_counter() - stage_started:.3f}s")
 
     # Keep only top-k final results
     sources = sources[:k]
 
-    # Mistral answer
+    # ========== LLM GENERATION ==========
     answer = "mistral_not_enabled"
     citations = []
     if use_mistral:
@@ -179,6 +146,7 @@ def query_cli():
     parser.add_argument("--query", type=str, required=True, help="Query text")
     parser.add_argument("--k", type=int, default=5, help=f"Number of results to return (1-{MAX_K})", metavar=f"1-{MAX_K}")
     parser.add_argument("--use-rerank", action="store_true", help="Enable reranking")
+    parser.add_argument("--use-cross-encoder", action="store_true", help="Enable cross-encoder reranking")
     parser.add_argument("--use-hybrid", action="store_true", help="Enable hybrid search")
     parser.add_argument("--use-mistral", action="store_true", help="Enable Mistral answer")
     parser.add_argument(
@@ -194,6 +162,7 @@ def query_cli():
         args.query,
         k=args.k,
         use_reranker=args.use_rerank,
+        use_cross_encoder=args.use_cross_encoder,
         use_hybrid_search=args.use_hybrid,
         use_mistral=args.use_mistral,
         filters=dict(args.filter) if args.filter else {},

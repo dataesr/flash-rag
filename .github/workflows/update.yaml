@@ -26,7 +26,7 @@ jobs:
               "use_fetch": true,
               "force_download": false,
               "force_ocr": false,
-              "db_override": true,
+              "db_override": false,
               "db_reset": false
             }')
           echo "Response: $response"

@@ -32,7 +32,6 @@ def populate(
     use_cache: bool = True,
     reset: bool = False,
     override: bool = False,
-    build_bm25: bool = True,
 ):
     collection = get_collection(reset)
     existing_ids = set(collection.get(include=[])["ids"])
@@ -75,9 +74,6 @@ def populate(
 
     logger.info(f"Indexed {len(new_chunks)} chunks")
 
-    if build_bm25:
-        build_bm25_index()
-
 
 def populate_cli():
     parser = argparse.ArgumentParser(description="Populate ChromaDB with EESR and SSMESR chunks")
@@ -85,6 +81,7 @@ def populate_cli():
     parser.add_argument("--override", action="store_true", help="Override existing documents")
     args = parser.parse_args()
     populate(reset=args.reset, override=args.override)
+    build_bm25_index()
 
 
 if __name__ == "__main__":

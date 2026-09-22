@@ -41,12 +41,17 @@
               <span class="toggle-label">Rerank</span>
             </label>
             <label class="toggle-switch">
+              <input type="checkbox" id="toggle-cross">
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">CrossEncoder</span>
+              </label>
+              <label class="toggle-switch">
               <input type="checkbox" id="toggle-hybrid">
               <span class="toggle-slider"></span>
               <span class="toggle-label">Hybrid</span>
             </label>
             <label class="toggle-switch">
-              <input type="checkbox" id="toggle-mistral" checked>
+              <input type="checkbox" id="toggle-mistral">
               <span class="toggle-slider"></span>
               <span class="toggle-label">Mistral</span>
             </label>
@@ -111,6 +116,7 @@
 
       // Read toggle states
       const useReranker = Boolean(document.getElementById("toggle-rerank").checked);
+      const useCrossEncoder = Boolean(document.getElementById("toggle-cross").checked)
       const useHybrid = Boolean(document.getElementById("toggle-hybrid").checked);
       const useMistral = Boolean(document.getElementById("toggle-mistral").checked);
       const topK = Number(document.getElementById("top-k").value);
@@ -126,6 +132,7 @@
           query: question,
           top_k: topK,
           use_reranker: useReranker,
+          use_cross_encoder: useCrossEncoder,
           use_hybrid_search: useHybrid,
           use_mistral: useMistral,
         }
@@ -156,7 +163,7 @@
               <span class="citation-source-index">Source ${sourceIndex}</span>
             `;
             citationButton.onclick = () => {
-              const sourceCard = document.getElementById(`source-${sourceIndex}`);
+              const sourceCard = document.getElementById(`source-${sourceIndex - 1}`);
               if (!sourceCard) return;
               sourceCard.scrollIntoView({ behavior: "smooth", block: "center" });
               sourceCard.classList.add("citation-highlight");

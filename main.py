@@ -7,7 +7,7 @@ from src.query import query as run_query
 from src.update import update as run_update, UpdateRequest
 
 logging.basicConfig(format="%(asctime)s | %(name)s | %(levelname)s | %(message)s", level=logging.DEBUG)
-for logger_name in ["httpx", "httpcore", "urllib3"]:
+for logger_name in ["httpx", "httpcore", "asyncio", "watchfiles"]:
     logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,7 @@ class QueryRequest(BaseModel):
     query: str
     top_k: int = 5
     use_reranker: bool = False
+    use_cross_encoder: bool = False
     use_hybrid_search: bool = False
     use_mistral: bool = False
     filters: dict[str, str | list[str]] = {}
@@ -30,6 +31,7 @@ async def query(payload: QueryRequest):
         payload.query,
         payload.top_k,
         payload.use_reranker,
+        payload.use_cross_encoder,
         payload.use_hybrid_search,
         payload.use_mistral,
         payload.filters,

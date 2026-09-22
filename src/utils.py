@@ -1,3 +1,4 @@
+from typing import Literal
 import os
 import json
 import logging
@@ -43,11 +44,21 @@ def load_jsonl(input_path: str) -> list[dict] | dict | None:
         return None
 
 
-def fetch_data(url: str, timeout: int = 60) -> dict:
+def fetch_data(
+    url: str,
+    method: Literal["GET", "POST"] = "GET",
+    timeout: int = 60,
+    **httpx_kwargs,
+) -> dict:
     """Fetch a URL and return the JSON response."""
     with httpx.Client() as client:
         try:
-            response = client.get(url, timeout=timeout)
+            if method == "GET":
+                response = client.get(url, timeout=timeout, **httpx_kwargs)
+            elif method == "POST":
+                response = client.post(url, timeout=timeout, **httpx_kwargs)
+            else:
+                raise ValueError(f"Incorrect method {method}. Only GET and POST are allowed")
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as error:

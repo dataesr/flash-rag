@@ -8,6 +8,7 @@ from src.pipelines.extract_ssmesr import extract as extract_ssmesr
 from src.pipelines.transform_ssmesr import transform as transform_ssmesr
 from src.pipelines.transform_eesr import transform as transform_eesr
 from src.populate import populate
+from src.bm25 import build_bm25_index
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,7 @@ def update(payload: UpdateRequest):
             reset=payload.db_reset,
             override=payload.db_override,
         )
+        build_bm25_index()
 
     logger.info(f"{'='*60}")
     logger.info("=== Update Complete ===")
