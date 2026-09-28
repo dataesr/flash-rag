@@ -3,13 +3,28 @@ import logging
 import argparse
 import pandas as pd
 from zipfile import ZipFile
-from src.utils import load_jsonl
+from src.utils import load_jsonl, fetch_data
 
 logger = logging.getLogger(__name__)
 
-OUTPUT_DIR = "./data"
 EESR_PUBLICATIONS_CODES = ["PAGE_EESR19"]
+EESR_ZENODO_ID = "19450708"  # first version id
+OUTPUT_DIR = "./data"
 OUTPUT_PAGES = f"{OUTPUT_DIR}/eesr_pages.jsonl"
+
+
+def publication_get_record() -> dict:
+    url = f"https://zenodo.org/api/records/{EESR_ZENODO_ID}/versions?size=1&sort=version"  # get last version
+
+    try:
+        data = fetch_data(url)
+        record = data.get("hits", {}).get("hits", [{}])[0]
+        assert (
+            record.get("metadata", {}).get("relations", {}).get("version", [{}])[0].get("is_last", False) == True
+        ), "EESR: incorrect zenodo version"
+        return record
+    except:
+        raise
 
 
 def publication_get_pages(code: str):
@@ -91,7 +106,11 @@ def load(use_cache: bool = True, use_fetch: bool = True, force_download: bool = 
         logger.info("No pages loaded, nothing to save")
         return
 
+    record = publication_get_record()
+    record_id = record["id"]
+
     pages_df = pd.DataFrame(all_pages)
+    pages_df["ZENODO_RECORD_ID"] = record_id
     pages_df.to_json(OUTPUT_PAGES, orient="records", lines=True, force_ascii=False)
     logger.info(f"Saved {len(pages_df)} pages to {OUTPUT_PAGES}")
 

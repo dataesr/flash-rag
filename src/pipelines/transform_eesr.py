@@ -12,24 +12,6 @@ OUTPUT_DIR = "./data"
 OUTPUT_CHUNKS = f"{OUTPUT_DIR}/eesr_chunks.jsonl"
 CHUNK_MAX_CHARS = 3000
 CONTENT_FIELDS = ["PAGE_CHAPEAU_FR", "PAGE_TEXTE_FR", "PAGE_METHODE_FR", "PAGE_NOTES_FR"]
-EESR_KEYWORDS = [
-    "Enseignement supérieur",
-    "Recherche",
-    "Statistiques",
-    "Innovation",
-    "Emploi scientifique",
-    "Ressources humaines",
-    "Formations et diplômes",
-    "Doctorat",
-    "Vie étudiante",
-    "Propriété intellectuelle",
-    "Financements",
-    "Documentation",
-    "Apprentissage",
-    "Orientation, parcours et réussite",
-    "Insertion professionnelle",
-    "Publications scientifiques",
-]
 
 
 def parse_illustration(illustration: dict) -> tuple[str, str, str]:
@@ -84,7 +66,7 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
     return {
         "title": page["PAGE_TITRE_FR"],
         "reference": "eesr",
-        "record_id": publication["PUBLICATION_NOM_DE_CODE"],
+        "record_id": page["ZENODO_RECORD_ID"],
         "publication_date": publication_date,
         "publication_epoch": publication_epoch,
         "publication_type": "book",
