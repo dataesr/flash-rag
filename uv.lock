@@ -633,6 +633,7 @@ dependencies = [
     { name = "nltk" },
     { name = "pandas" },
     { name = "rank-bm25" },
+    { name = "tenacity" },
 ]
 
 [package.metadata]
@@ -646,6 +647,7 @@ requires-dist = [
     { name = "nltk", specifier = ">=3.10.3" },
     { name = "pandas", specifier = ">=3.0.2" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
+    { name = "tenacity", specifier = ">=9.1.4" },
 ]
 
 [[package]]

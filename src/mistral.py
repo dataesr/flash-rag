@@ -9,6 +9,7 @@ from mistralai.client import Mistral
 from mistralai.client.models import SystemMessage, UserMessage
 from chromadb.api.types import Embeddings, Documents, EmbeddingFunction, Space
 from chromadb.utils.embedding_functions import register_embedding_function
+from tenacity import retry, stop_after_attempt, wait_exponential
 from dotenv import load_dotenv
 
 MAX_DOCUMENTS_PER_BATCH = 8
@@ -59,13 +60,15 @@ class MistralEmbeddingFunction(EmbeddingFunction[Documents]):
         batches = batch_mistral_documents(input)
         embeddings: list[np.ndarray] = []
         for batch in batches:
-            output = self.client.embeddings.create(
-                model=self.model,
-                inputs=batch,
-            )
+            output = self._create_embeddings(batch)
             embeddings.extend(np.array(data.embedding) for data in output.data)
 
         return embeddings
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def _create_embeddings(self, batch: list[str]):
+        """Get the embedddings with retry"""
+        return self.client.embeddings.create(model=self.model, inputs=batch)
 
     @staticmethod
     def name() -> str:

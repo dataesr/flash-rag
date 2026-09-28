@@ -5,6 +5,7 @@ import logging
 import httpx
 import argparse
 import unicodedata
+from tenacity import retry, stop_after_attempt, wait_exponential
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ def load_jsonl(input_path: str) -> list[dict] | dict | None:
         return None
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential())
 def fetch_data(
     url: str,
     method: Literal["GET", "POST"] = "GET",
