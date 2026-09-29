@@ -1,14 +1,36 @@
 import unittest
 from unittest.mock import patch
 
+import httpx
+from src.pipelines.load_ssmesr import fetch_records
 from fastapi.testclient import TestClient
 
 from main import app
 from src.mistral import batch_mistral_documents
-from src.utils import parse_key_value_pair
-
+from src.utils import fetch_data, parse_key_value_pair
 
 class SmokeTests(unittest.TestCase):
+
+    def test_fetch_records_waits_and_retries_after_rate_limit(self):
+        request = httpx.Request("GET", "https://example.com")
+        rate_limited = httpx.Response(429, request=request)
+        success = httpx.Response(200, request=request, json={"hits": {"hits": []}, "links": {}})
+        client = unittest.mock.MagicMock()
+        client.__enter__.return_value = client
+        client.get.side_effect = [rate_limited, rate_limited, rate_limited, success]
+
+        with (
+            patch("src.utils.httpx.Client", return_value=client),
+            patch("src.pipelines.load_ssmesr.time.sleep") as sleep,
+            patch.object(fetch_data.retry, "sleep") as retry_sleep,
+        ):
+            records = fetch_records("https://example.com")
+
+        self.assertTrue(records.empty)
+        self.assertEqual(client.get.call_count, 4)
+        self.assertEqual(retry_sleep.call_count, 2)
+        sleep.assert_called_once_with(5)
+
     def test_mistral_batches_respect_request_limit(self):
         documents = [f"document-{index}" for index in range(9)]
 

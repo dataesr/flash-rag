@@ -45,7 +45,7 @@ def load_jsonl(input_path: str) -> list[dict] | dict | None:
         return None
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential())
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(), reraise=True)
 def fetch_data(
     url: str,
     method: Literal["GET", "POST"] = "GET",
