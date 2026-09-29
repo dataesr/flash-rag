@@ -29,7 +29,6 @@ def batch_chroma_payload(
 
 def populate(
     reference: Literal["all", "ssmesr", "eesr"] = "all",
-    use_cache: bool = True,
     reset: bool = False,
     override: bool = False,
 ):
@@ -39,14 +38,14 @@ def populate(
 
     if reference in ["all", "ssmesr"]:
         logger.info("Running SSMESR transform")
-        ssmesr_chunks = transform_ssmesr(use_cache)
+        ssmesr_chunks = transform_ssmesr(use_cache=False)
         logger.info(f"SSMESR chunks: {len(ssmesr_chunks)}")
         if len(ssmesr_chunks):
             all_chunks += ssmesr_chunks
 
     if reference in ["all", "eesr"]:
         logger.info("Running EESR transform")
-        eesr_chunks = transform_eesr(use_cache)
+        eesr_chunks = transform_eesr(use_cache=False)
         logger.info(f"EESR chunks: {len(eesr_chunks)}")
         if len(eesr_chunks):
             all_chunks += eesr_chunks
@@ -77,6 +76,7 @@ def populate(
 
 def populate_cli():
     parser = argparse.ArgumentParser(description="Populate ChromaDB with EESR and SSMESR chunks")
+    parser.add_argument("--reference", choices=["all", "ssmesr", "eesr"], default="all", help="Reference to populate")
     parser.add_argument("--reset", action="store_true", help="Delete and recreate the collection")
     parser.add_argument("--override", action="store_true", help="Override existing documents")
     args = parser.parse_args()
