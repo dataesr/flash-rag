@@ -63,14 +63,13 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
     page_url = publication_url + (page.get("PAGE_THEME_CODE") or "") + "/" + normalize_text(page["PAGE_TITRE_FR"], sep="_") + "/"
     keywords = publication.get("PUBLICATION_THEMATIQUES", "").split(";")
 
-    return {
+    metadata = {
         "title": page["PAGE_TITRE_FR"],
         "reference": "eesr",
         "record_id": page["ZENODO_RECORD_ID"],
         "publication_date": publication_date,
         "publication_epoch": publication_epoch,
         "publication_type": "book",
-        "keywords": [k.lower() for k in keywords],
         "file_id": file_id,
         "file_name": page["PAGE_FILE_NAME"],
         "file_format": "json",
@@ -79,7 +78,10 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
         "page_index": page["PAGE_NUMERO"],
         "section_title": page["PAGE_TITRE_FR"],
     }
+    if len(keywords):
+        metadata["keywords"] = [k.lower() for k in keywords]
 
+    return metadata
 
 def build_page_text(page: dict[str, Any]) -> str:
     parts: list[str] = []

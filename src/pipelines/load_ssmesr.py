@@ -14,14 +14,14 @@ OCR_DIR = f"{OUTPUT_DIR}/ocr"
 OUTPUT_RECORDS = f"{OUTPUT_DIR}/ssmesr_records.jsonl"
 
 
-def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
+def fetch_records(url: str, wait_for_rate_limit: int = 15) -> pd.DataFrame:
     """
     Fetch all records from a paginated URL, respecting a rate limit.
 
     Args:
-        url: The initial URL to fetch from.
-        rate_limit: Max requests per minute (default: 90, safely under the 100/min limit).
+        url: The initial URL to fetch from
     """
+
     all_records = []
     page = 0
     request_count = 0
@@ -41,10 +41,9 @@ def fetch_records(url: str, rate_limit: int = 30) -> pd.DataFrame:
         except httpx.HTTPStatusError as error:
             status = error.response.status_code
             if status == 429:
-                wait = 5
                 page -= 1  # retry current page
-                logger.warning(f"Rate limit reached ({request_count} req). Waiting {wait:.1f}s...")
-                time.sleep(wait)
+                logger.warning(f"Rate limit reached ({request_count} req). Waiting {wait_for_rate_limit:.1f}s...")
+                time.sleep(wait_for_rate_limit)
             elif status == 422:
                 logger.error(f"Unprocessable request for {url}, skipping.")
                 raise error

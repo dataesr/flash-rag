@@ -53,6 +53,8 @@ def populate(
     new_chunks = all_chunks
     if not override:
         new_chunks = [chunk for chunk in all_chunks if chunk["id"] not in existing_ids]
+        if len(new_chunks):
+            logger.info(f"Found {len(new_chunks)} new chunks to add")
 
     if not new_chunks:
         logger.info("No new chunks to ingest")
