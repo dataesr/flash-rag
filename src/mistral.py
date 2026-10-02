@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 MISTRAL_RAG_MODEL = "mistral-small-2603"
-MISTRAL_OCR_MODEL = "mistral-ocr-2512"  # TODO: try mistral-ocr-4-1
+MISTRAL_OCR_MODEL = "mistral-ocr-4-1"
 MISTRAL_EMBED_MODEL = "mistral-embed-2312"
 
 client = Mistral(api_key=MISTRAL_API_KEY)
@@ -122,6 +122,7 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
             extract_footer=True,
             extract_header=True,
             retries=RetryConfig(strategy="backoff", backoff=backoff, retry_connection_errors=True),
+            table_format="markdown",
         )
         data = json.loads(response.model_dump_json())
         return data
