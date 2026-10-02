@@ -7,6 +7,7 @@ from unittest.mock import patch
 import httpx
 import pandas as pd
 from src.pipelines.load_ssmesr import fetch_records, get_files, download_one_file
+from src.pipelines.extract_ssmesr import extract_one
 from fastapi.testclient import TestClient
 
 from main import app
@@ -14,6 +15,24 @@ from src.mistral import batch_mistral_documents
 from src.utils import fetch_data, parse_key_value_pair
 
 class SmokeTests(unittest.TestCase):
+
+    def test_extract_one_reports_failure_when_ocr_returns_no_data(self):
+        file = pd.Series(
+            {
+                "file_name": "book.pdf",
+                "file_path": "data/pdf/record-1/book.pdf",
+                "ocr_path": "data/ocr/pdf/record-1/book.json",
+            }
+        )
+
+        with (
+            patch("src.pipelines.extract_ssmesr.mistral_ocr", return_value=None),
+            patch("src.pipelines.extract_ssmesr.save_jsonl") as save_jsonl,
+        ):
+            result = extract_one(file, use_cache=False)
+
+        self.assertEqual(result, "failed")
+        save_jsonl.assert_not_called()
 
     def test_fetch_records_waits_and_retries_after_rate_limit(self):
         request = httpx.Request("GET", "https://example.com")

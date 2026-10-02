@@ -187,6 +187,9 @@ def extract_one(file: pd.Series, use_cache: bool = True) -> str:
 
     try:
         data = mistral_ocr(file_path, file_name)
+        if not data:
+            logger.error(f"No OCR data returned for {file_name}")
+            return "failed"
         save_jsonl(data, ocr_path)
         return "extracted"
     except Exception as error:

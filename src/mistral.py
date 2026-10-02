@@ -107,8 +107,8 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
 
     try:
         backoff = BackoffStrategy(
-            initial_interval=1,
-            max_interval=32,
+            initial_interval=5,
+            max_interval=120,
             exponent=2.0,
             max_elapsed_time=300,  # Max 5 min
         )
