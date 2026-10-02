@@ -14,8 +14,15 @@ OUTPUT_DIR = "./data"
 OCR_DIR = f"{OUTPUT_DIR}/ocr"
 OUTPUT_RECORDS = f"{OUTPUT_DIR}/ssmesr_records.jsonl"
 
+ZENODO_RATE_WAIT = 61  # 30 req per min
+ZENODO_MAX_RETRIES = 10
 
-def fetch_records(url: str, wait_for_rate_limit: int = 15) -> pd.DataFrame:
+
+def fetch_records(
+    url: str,
+    rate_limit_wait: int = ZENODO_RATE_WAIT,
+    rate_limit_max_retries: int = ZENODO_MAX_RETRIES,
+) -> pd.DataFrame:
     """
     Fetch all records from a paginated URL, respecting a rate limit.
 
@@ -25,31 +32,41 @@ def fetch_records(url: str, wait_for_rate_limit: int = 15) -> pd.DataFrame:
 
     all_records = []
     page = 0
-    request_count = 0
 
+    request_count = 0
+    retries = 0
     while url:
         page += 1
 
         logger.debug(f"Fetching page {page}: {url}")
-        try:
-            data = fetch_data(url, timeout=120)
-            request_count += 1
+        while retries < rate_limit_max_retries:
+            try:
+                data = fetch_data(url, timeout=120)
+                request_count += 1
 
-            hits = data.get("hits", {}).get("hits", [])
-            all_records.extend(hits)
-            logger.debug(f"  → Got {len(hits)} hits (total: {len(all_records)})")
-            url = data.get("links", {}).get("next")
-        except httpx.HTTPStatusError as error:
-            status = error.response.status_code
-            if status == 429:
-                page -= 1  # retry current page
-                logger.warning(f"Rate limit reached ({request_count} req). Waiting {wait_for_rate_limit:.1f}s...")
-                time.sleep(wait_for_rate_limit)
-            elif status == 422:
-                logger.error(f"Unprocessable request for {url}, skipping.")
-                raise error
-            else:
-                raise
+                hits = data.get("hits", {}).get("hits", [])
+                all_records.extend(hits)
+                logger.debug(f"  → Got {len(hits)} hits (total: {len(all_records)})")
+                url = data.get("links", {}).get("next")
+                break  # Success
+
+            except httpx.HTTPStatusError as error:
+                status = error.response.status_code
+                if status == 429:
+                    retries += 1
+                    if retries >= rate_limit_max_retries:
+                        logger.error(f"{url} → Max retries ({rate_limit_max_retries}) reached, skipping.")
+                        raise error
+                    logger.warning(
+                        f"{url} → Rate limit reached. Waiting {rate_limit_wait:.1f}s... "
+                        f"(attempt {retries}/{rate_limit_max_retries})"
+                    )
+                    time.sleep(rate_limit_wait)
+                elif status == 422:
+                    logger.error(f"{url} → Unprocessable request, skipping.")
+                    raise error
+                else:
+                    raise
 
     df = pd.DataFrame(all_records)
     return df
@@ -138,7 +155,12 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
     return files
 
 
-def download_one_file(file: pd.Series, use_cache: bool = True) -> str:
+def download_one_file(
+    file: pd.Series,
+    use_cache: bool = True,
+    rate_limit_wait: int = ZENODO_RATE_WAIT,
+    rate_limit_max_retries: int = ZENODO_MAX_RETRIES,
+) -> str:
     url = file["file_download"]
     path = file["file_path"]
     name = file["file_name"]
@@ -149,13 +171,27 @@ def download_one_file(file: pd.Series, use_cache: bool = True) -> str:
         return "skipped"
     if use_cache and os.path.exists(path):
         return "skipped"
-    try:
-        download_file(url, path)
-        return "downloaded"
-    except Exception as error:
-        logger.error(f"Failed to download {name}: {error}")
-        logger.debug(f"{url=}, {path=}")
-        return "failed"
+
+    retries = 0
+    while retries < rate_limit_max_retries:
+        try:
+            download_file(url, path)
+            return "downloaded"
+        except httpx.HTTPStatusError as error:
+            status = error.response.status_code
+            if status == 429:
+                retries += 1
+                if retries >= rate_limit_max_retries:
+                    logger.error(f"{url} → Max retries ({rate_limit_max_retries}) reached, skipping")
+                    return "failed"
+                logger.warning(f"{url} → Rate limit reached. Waiting {rate_limit_wait:.1f}s...")
+                time.sleep(rate_limit_wait)
+            else:
+                raise
+        except Exception as error:
+            logger.error(f"{url} → Failed to download {name}: {error}")
+            return "failed"
+    return "failed"
 
 
 def download_files(records: pd.DataFrame, use_cache: bool = True, formats: list[str] = []):

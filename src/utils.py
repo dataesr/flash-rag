@@ -1,10 +1,11 @@
-from typing import Literal
 import os
+import time
 import json
 import logging
 import httpx
 import argparse
 import unicodedata
+from typing import Literal
 from tenacity import retry, stop_after_attempt, wait_exponential
 from datetime import datetime
 
@@ -71,6 +72,7 @@ def fetch_data(
             raise error
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(), reraise=True)
 def download_file(url: str, output_path: str):
     """Download a file from a URL and save it."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

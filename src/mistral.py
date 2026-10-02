@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 from mistralai.client import Mistral
 from mistralai.client.models import SystemMessage, UserMessage
+from mistralai.client.utils import BackoffStrategy, RetryConfig
 from chromadb.api.types import Embeddings, Documents, EmbeddingFunction, Space
 from chromadb.utils.embedding_functions import register_embedding_function
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -105,6 +106,12 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
         return None
 
     try:
+        backoff = BackoffStrategy(
+            initial_interval=1,
+            max_interval=32,
+            exponent=2.0,
+            max_elapsed_time=300,  # Max 5 min
+        )
         response = client.ocr.process(
             model=MISTRAL_OCR_MODEL,
             document={
@@ -114,6 +121,7 @@ def mistral_ocr(document_path: str, document_name: str) -> dict | None:
             },
             extract_footer=True,
             extract_header=True,
+            retries=RetryConfig(strategy="backoff", backoff=backoff, retry_connection_errors=True),
         )
         data = json.loads(response.model_dump_json())
         return data
