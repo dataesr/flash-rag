@@ -1,3 +1,4 @@
+from src.pipelines.load_eesr import EESR_TITLE
 import os
 import re
 import logging
@@ -221,10 +222,13 @@ def extract_pdf(files: pd.DataFrame, force_ocr: bool = False):
 
 def extract(use_cache: bool = True, force_ocr: bool = False):
     # Get records
-    logger.warning("Only 'article' publications will be extracted")
     records = get_records()
-    records = records[records["metadata"].apply(lambda x: x.get("resource_type", {}).get("subtype") == "article")]
-    logger.info(f"Found {len(records)} 'article' records")
+
+    # logger.warning("Only 'article' publications will be extracted")
+    # records = records[records["metadata"].apply(lambda x: x.get("resource_type", {}).get("subtype") == "article")]
+    # logger.info(f"Found {len(records)} 'article' records")
+    records = records[~records["title"].isin([EESR_TITLE])]
+    logger.debug(f"Skip EESR records - added separatly (remaining records={len(records)})")
 
     # Get files from records
     files = get_files(records)

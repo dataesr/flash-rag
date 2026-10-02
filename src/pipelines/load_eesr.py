@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 EESR_PUBLICATIONS_CODES = ["PAGE_EESR19"]
 EESR_ZENODO_ID = "19450708"  # first version id
+EESR_TITLE = "état de l'Enseignement supérieur, de la Recherche et de l'Innovation en France n°19"
 OUTPUT_DIR = "./data"
 OUTPUT_PAGES = f"{OUTPUT_DIR}/eesr_pages.jsonl"
 

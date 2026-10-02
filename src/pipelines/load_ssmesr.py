@@ -1,3 +1,4 @@
+import hashlib
 import os
 import time
 import logging
@@ -100,10 +101,16 @@ def get_files(records: pd.DataFrame) -> pd.DataFrame:
             .reset_index(drop=True)
         )
         # Build file paths
+        files_data["record_id"] = exploded["id"].astype(str)
         files_data["file_format"] = files_data["file_name"].apply(lambda x: x.split(".")[-1])
-        files_data["file_path"] = OUTPUT_DIR + "/" + files_data["file_format"] + "/" + files_data["file_name"]
         files_data["ocr_name"] = files_data["file_name"].apply(lambda x: x.split(".")[0]) + ".json"
-        files_data["ocr_path"] = OCR_DIR + "/" + files_data["file_format"] + "/" + files_data["ocr_name"]
+        files_data["file_path"] = files_data.apply(
+            lambda file: os.path.join(OUTPUT_DIR, file["file_format"], file["record_id"], file["file_name"]), axis=1
+        )
+        files_data["ocr_path"] = files_data.apply(
+            lambda file: os.path.join(OCR_DIR, file["file_format"], file["record_id"], file["ocr_name"]), axis=1
+        )
+        files_data = files_data.drop(columns=["record_id"])
 
         # Get metadata
         metadata = exploded["metadata"]
