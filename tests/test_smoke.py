@@ -1,5 +1,6 @@
 import unittest
 import hashlib
+import json
 import os
 import tempfile
 from unittest.mock import patch
@@ -7,12 +8,14 @@ from unittest.mock import patch
 import httpx
 import pandas as pd
 from src.pipelines.load_ssmesr import fetch_records, get_files, download_one_file
-from src.pipelines.extract_ssmesr import extract_one
+from src.pipelines.extract_ssmesr import extract_one, parse_one_ocr, parse_one_page
+from src.pipelines.transform_eesr import page_to_chunks
+from src.pipelines.transform_ssmesr import chunk_document
 from fastapi.testclient import TestClient
 
 from main import app
 from src.mistral import batch_mistral_documents
-from src.utils import fetch_data, parse_key_value_pair, to_unix_epoch
+from src.utils import fetch_data, parse_key_value_pair, split_text, to_unix_epoch
 
 class SmokeTests(unittest.TestCase):
 
@@ -33,6 +36,37 @@ class SmokeTests(unittest.TestCase):
 
         self.assertEqual(result, "failed")
         save_jsonl.assert_not_called()
+
+    def test_parse_one_ocr_reparses_legacy_cached_sections(self):
+        ocr_data = {
+            "pages": [
+                {
+                    "index": 0,
+                    "markdown": "# Section\n\nBody text",
+                    "parsed": [{"level": 1, "title": "Old section", "paragraphs": ["Old body"]}],
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            ocr_path = os.path.join(directory, "ocr.json")
+            with open(ocr_path, "w", encoding="utf-8") as file:
+                json.dump(ocr_data, file)
+            file_row = pd.Series(
+                {
+                    "file_name": "document.pdf",
+                    "file_path": "document.pdf",
+                    "file_format": "pdf",
+                    "ocr_path": ocr_path,
+                }
+            )
+
+            result = parse_one_ocr(file_row)
+
+            with open(ocr_path, "r", encoding="utf-8") as file:
+                updated_data = json.load(file)
+
+        self.assertEqual(result["file"], "parsed")
+        self.assertEqual(updated_data["pages"][0]["parsed"][0]["content"], ["Body text"])
 
     def test_fetch_records_waits_and_retries_after_rate_limit(self):
         request = httpx.Request("GET", "https://example.com")
@@ -72,6 +106,79 @@ class SmokeTests(unittest.TestCase):
 
     def test_year_month_date_uses_first_day_of_month(self):
         self.assertEqual(to_unix_epoch("2024-06"), to_unix_epoch("2024-06-01"))
+
+    def test_split_text_caps_long_unbroken_input(self):
+        text = "x" * 19698
+
+        chunks = split_text(text, 8000)
+
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(len(chunk) <= 8000 for chunk in chunks))
+        self.assertEqual("".join(chunks), text)
+
+    def test_ssmesr_transform_splits_long_paragraphs_and_tables(self):
+        page = {
+            "index": 0,
+            "markdown": "# Section\n\n" + "paragraph " * 9000 + "\n\n[tbl-1.md](tbl-1.md)",
+            "tables": [{"id": "tbl-1.md", "content": "table " * 9000}],
+        }
+        page_data = {
+            "pages": [
+                {
+                    "index": 0,
+                    "parsed": parse_one_page(page),
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            ocr_path = os.path.join(directory, "ocr.json")
+            with open(ocr_path, "w", encoding="utf-8") as file:
+                json.dump(page_data, file)
+
+            chunks = chunk_document(ocr_path, {"file_name": "book.pdf"})
+
+        self.assertTrue(chunks)
+        self.assertTrue(all(len(chunk["document"]) <= 8000 for chunk in chunks))
+        self.assertEqual(len({chunk["id"] for chunk in chunks}), len(chunks))
+        self.assertIn("table", " ".join(chunk["document"] for chunk in chunks))
+
+    def test_eesr_transform_splits_long_paragraphs_and_tables(self):
+        page = {
+            "PUBLICATION": {
+                "PUBLICATION_LIEN_SITE_COMPAGNON": "",
+                "PUBLICATION_LIEN": "",
+                "PUBLICATION_DATE_TRI": "2024-06",
+                "PUBLICATION_DATE_ANNEE": "2024",
+                "PUBLICATION_THEMATIQUES": "",
+            },
+            "PAGE_NOM_DE_CODE": "EESR19_ES_01",
+            "PAGE_TITRE_FR": "Long page",
+            "PAGE_TITRE_EN": "",
+            "PAGE_THEME_CODE": "",
+            "ZENODO_RECORD_ID": "record-1",
+            "PAGE_FILE_NAME": "page.json",
+            "PAGE_NUMERO": 1,
+            "PAGE_CHAPEAU_FR": "",
+            "PAGE_TEXTE_FR": "paragraph " * 4000,
+            "PAGE_METHODE_FR": "",
+            "PAGE_NOTES_FR": "",
+            "ILLUSTRATIONS": [
+                {
+                    "ILLUSTRATION_TYPE": "Tableau",
+                    "ILLUSTRATION_TITRE_FR": "Long table",
+                    "ILLUSTRATION_SOUS_TYPE": "Data",
+                    "ILLUSTRATION_TABLEAU_COLONNES_FR": "Column",
+                    "ILLUSTRATION_TABLEAU_LIGNES_FR": "Row",
+                    "ILLUSTRATION_TABLEAU_VALEURS_FR": "value " * 4000,
+                }
+            ],
+        }
+
+        chunks = page_to_chunks(page)
+
+        self.assertTrue(chunks)
+        self.assertTrue(all(len(chunk["document"]) <= 3000 for chunk in chunks))
+        self.assertEqual(len({chunk["id"] for chunk in chunks}), len(chunks))
 
     def test_query_endpoint_returns_contract_without_external_services(self):
         expected = ([{"id": "source-1"}], "mistral_not_enabled", [])

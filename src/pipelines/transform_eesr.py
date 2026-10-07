@@ -4,21 +4,36 @@ import argparse
 from typing import Any
 import pandas as pd
 from src.pipelines.load_eesr import get_pages
-from src.utils import save_jsonl, to_unix_epoch, normalize_text
+from src.query import MIN_CHUNK_LEN, MAX_CHUNK_LEN
+from src.utils import save_jsonl, split_text, to_unix_epoch, normalize_text
 
 logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = "./data"
 OUTPUT_CHUNKS = f"{OUTPUT_DIR}/eesr_chunks.jsonl"
-CHUNK_MAX_CHARS = 3000
 CONTENT_FIELDS = ["PAGE_CHAPEAU_FR", "PAGE_TEXTE_FR", "PAGE_METHODE_FR", "PAGE_NOTES_FR"]
 
+SKIP_PAGES = [
+    "EESR19_POUR_EN_SAVOIR_PLUS",
+    "EESR19_RESUME",
+    "EESR19_PREFACE",
+    "EESR19_MENTIONS_LEGALES",
+    "EESR19_AUTRES_PUBLICATIONS",
+    "EESR19_A_PROPOS",
+    "EESR19_A_PROPOS_OD",
+    "EESR19_Annexe_1",
+    "EESR19_Annexe_2",
+    "EESR19_Annexe_3",
+    "EESR19_Annexe_4",
+    "EESR19_Annexe_5",
+    "EESR19_Annexe_6",
+    "EESR19_Annexe_7",
+    "EESR19_Annexe_8",
+]
 
-def parse_illustration(illustration: dict) -> tuple[str, str, str]:
+def illustration_to_markdown(illustration: dict) -> str:
     """
-    Parse EESR illustration
-
-    Returns: (markdown, csv, headers_text)
+    Return EESR illustration as markdown
     """
 
     columns = illustration.get("ILLUSTRATION_TABLEAU_COLONNES_FR", "").split("|")
@@ -26,7 +41,7 @@ def parse_illustration(illustration: dict) -> tuple[str, str, str]:
     values = illustration.get("ILLUSTRATION_TABLEAU_VALEURS_FR", "").split("§")
 
     if not columns or not rows or not values:
-        return "", "", ""
+        return ""
 
     # Clean empty values
     columns = [c.strip() for c in columns if c.strip()]
@@ -36,20 +51,13 @@ def parse_illustration(illustration: dict) -> tuple[str, str, str]:
     md = "| " + " | ".join(columns) + " |\n"
     md += "|" + "|".join(["---"] * len(columns)) + "|\n"
 
-    # Build CSV
-    csv_lines = [",".join(columns)]
-
     for row_idx, row_label in enumerate(rows):
         if row_idx < len(values):
             row_values = values[row_idx].split("|")
             row_values = [v.strip() for v in row_values if v.strip()]
             md += "| " + " | ".join([row_label] + row_values) + " |\n"
-            csv_lines.append(",".join([row_label] + row_values))
 
-    csv_table = "\n".join(csv_lines)
-    headers_text = " | ".join(columns)
-
-    return md, csv_table, headers_text
+    return md
 
 
 def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
@@ -60,7 +68,9 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
     publication_epoch = to_unix_epoch(publication_date) if publication_date else 0
 
     file_id = page["PAGE_NOM_DE_CODE"].lower().replace("eesr", "")
-    page_url = publication_url + (page.get("PAGE_THEME_CODE") or "") + "/" + normalize_text(page["PAGE_TITRE_FR"], sep="_") + "/"
+    page_url = (
+        publication_url + (page.get("PAGE_THEME_CODE") or "") + "/" + normalize_text(page["PAGE_TITRE_FR"], sep="_") + "/"
+    )
     keywords = publication.get("PUBLICATION_THEMATIQUES", "").split(";")
 
     metadata = {
@@ -82,6 +92,7 @@ def build_page_metadata(page: dict[str, Any]) -> dict[str, Any]:
         metadata["keywords"] = [k.lower() for k in keywords]
 
     return metadata
+
 
 def build_page_text(page: dict[str, Any]) -> str:
     parts: list[str] = []
@@ -127,15 +138,19 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
 
             candidate = current_chunk + "\n\n" + paragraph
-            if len(candidate) <= CHUNK_MAX_CHARS:
+            if len(candidate) <= MAX_CHUNK_LEN:
                 current_chunk = candidate
             else:
                 text_chunks.append(current_chunk)
                 current_chunk = paragraph
 
-        if current_chunk:
+        if len(current_chunk) < MIN_CHUNK_LEN:
+            logger.warning(f"[{file_id}] Small chunk '{current_chunk}' → skipping")
+        else:
             text_chunks.append(current_chunk)
 
+        # Split chunks of CHUNK_MAX_CHARS size max
+        text_chunks = [part for chunk in text_chunks for part in split_text(chunk, MAX_CHUNK_LEN)]
         for chunk_idx, document in enumerate(text_chunks, start=1):
             chunks.append(
                 {
@@ -163,13 +178,19 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
         sous_type = illust.get("ILLUSTRATION_SOUS_TYPE", "")
 
         # Parse table
-        markdown_table, csv_table, headers_text = parse_illustration(illust)
+        markdown_table = illustration_to_markdown(illust)
 
         if not markdown_table:
+            logger.warning(f"[{file_id}] Empty table content for table {illust_index} → skipping")
+            continue
+
+        if len(markdown_table) > MAX_CHUNK_LEN:
+            logger.warning(f"[{file_id}] Large table {illust_index} → skipping")
+            # logger.debug(markdown_table)
             continue
 
         # Create document with context for BM25
-        doc_parts = [f"{sous_type}: {title}", f"Colonnes: {headers_text}", "", markdown_table]
+        doc_parts = [f"{sous_type}: {title}", markdown_table]
         document = "\n".join(doc_parts)
 
         chunks.append(
@@ -196,8 +217,9 @@ def transform() -> list[dict[str, Any]]:
         return []
 
     # Skip annexes, resumes, and other non-content pages based on PAGE_COURANTE_ID
-    logger.warning(f"Skipping pages PAGE_COURANTE_ID <= 1 (annexes, resumes, etc.)")
+    logger.warning(f"Skipping pages annexes, resumes, etc.)")
     pages = pages[pages["PAGE_COURANTE_ID"] > 1]
+    pages = pages[~pages["PAGE_NOM_DE_CODE"].isin(SKIP_PAGES)]
 
     chunks: list[dict[str, Any]] = []
     for _, row in pages.iterrows():

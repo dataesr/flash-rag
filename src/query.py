@@ -19,6 +19,7 @@ CURRENT_DATE = datetime.now()
 CURRENT_YEAR = CURRENT_DATE.year
 MAX_TIMESTAMP = datetime((CURRENT_YEAR - 4), 1, 1).timestamp()  # 3 years ago + 1 year buffer
 MIN_CHUNK_LEN = 50  # Minimum chunk length to consider for querying
+MAX_CHUNK_LEN = 5_000
 MAX_K = 50  # Max docs to retrieves
 K_MULTIPLIER = 5  # Multiplier for candidate retrieval before RRF and reranking
 

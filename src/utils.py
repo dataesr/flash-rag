@@ -116,3 +116,28 @@ def normalize_text(text: str, sep: str = " ") -> str:
     )
     text = sep.join(text.split())
     return text
+
+
+def split_text(text: str, max_chars: int) -> list[str]:
+    if max_chars <= 0:
+        raise ValueError("max_chars must be greater than zero")
+
+    remaining = text.strip()
+    chunks = []
+    while len(remaining) > max_chars:
+        split_at = remaining.rfind("\n", 0, max_chars + 1)
+        if split_at < max_chars // 2:
+            split_at = remaining.rfind(" ", 0, max_chars + 1)
+        if split_at <= 0:
+            split_at = max_chars
+
+        chunks.append(remaining[:split_at].strip())
+        remaining = remaining[split_at:].strip()
+
+    if remaining:
+        chunks.append(remaining)
+
+    if len(chunks) > 1:
+        logger.debug("Large text split into %s chunks (max_chars=%s)", len(chunks), max_chars)
+        logger.debug(text)
+    return chunks

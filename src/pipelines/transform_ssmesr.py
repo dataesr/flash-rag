@@ -1,16 +1,17 @@
 import os
+import re
 import json
 import logging
 import argparse
 import pandas as pd
 from src.pipelines.load_ssmesr import OCR_DIR, get_records, get_files
-from src.utils import save_jsonl, to_unix_epoch
+from src.query import MIN_CHUNK_LEN, MAX_CHUNK_LEN
+from src.utils import save_jsonl, to_unix_epoch, split_text
 
 logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = "./data"
 OUTPUT_CHUNKS = f"{OUTPUT_DIR}/ssmesr_chunks.jsonl"
-CHUNK_MAX_CHARS = 8000
 
 
 def parse_table(table: dict) -> tuple[str, str, str]:
@@ -43,9 +44,130 @@ def parse_table(table: dict) -> tuple[str, str, str]:
     return md, csv, headers_text
 
 
-def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
+def chunk_one_page(page: dict, document_metadata: dict) -> list[dict]:
     file_name = document_metadata["file_name"]
     file_name_no_ext = file_name.split(".")[0] if "." in file_name else file_name
+
+    # mistral ocr 4 patterns
+    table_pattern = re.compile(r"\[(tbl-[^]]+\.md)\]\([^)]+\.md\)")
+    image_pattern = re.compile(r"!\[[^\]]+\.jpeg\]\([^)]+\.jpeg\)")
+    superscript_pattern = re.compile(r"\$\^\{\d+\}\$")
+    heading_pattern = re.compile(r"^(#{1,6})\s+(.*)")
+
+    page_index = page.get("index", 0) + 1  # Start at 1
+    markdown = page.get("markdown", "")
+
+    if not markdown:
+        logger.debug(f"[{file_name}] No markdown found for page={page_index} → skipping")
+        return []
+
+    chunks = []
+    tables = {tbl["id"]: tbl for tbl in page.get("tables", [])}
+
+    current_doc = ""
+    section_title = ""
+    section_level = 0
+    section_index = 0
+    chunk_index = 0
+    has_table = False
+
+    def flush_chunk():
+        """Flush current buffer into a chunk"""
+        nonlocal current_doc, chunk_index, section_title, section_level, has_table
+        current_doc = current_doc.strip()
+        if not current_doc:
+            return
+
+        if len(current_doc) < MIN_CHUNK_LEN:
+            logger.warning(f"[{file_name}] Small chunk at page={page_index}, section={section_index} → skipping")
+            logger.debug(f"chunk={current_doc}")
+            return
+
+        next_chunks = split_text(current_doc, MAX_CHUNK_LEN)
+        for next_doc in next_chunks:
+            chunk_index += 1
+            chunks.append(
+                {
+                    "id": f"ssmesr_{file_name_no_ext}_p{page_index}_s{section_index}_c{chunk_index}",
+                    "document": next_doc,
+                    "metadata": {
+                        **document_metadata,
+                        "page_index": page_index,
+                        "section_index": section_index,
+                        "section_title": section_title[:200],
+                        "section_level": section_level,
+                        "chunk_len": len(next_doc),
+                        "chunk_type": "table" if has_table else "paragraph",
+                    },
+                }
+            )
+
+        # Reset buffer
+        current_doc = ""
+        has_table = False
+
+    for para in markdown.split("\n\n"):
+        para = para.strip()
+        if not para:
+            continue
+
+        lines = para.split("\n")
+        first_line = lines[0]
+        heading_match = heading_pattern.match(first_line)
+
+        if heading_match:
+            # New section: flush current chunk and reset
+            flush_chunk()
+            chunk_index = 0
+
+            section_index += 1
+            section_level = len(heading_match.group(1))
+            title_parts = [heading_match.group(2)]
+
+            # Collect multi-line section title
+            for line in lines[1:]:
+                line = line.strip()
+                if line:
+                    title_parts.append(line)
+                else:
+                    break
+            section_title = " ".join(title_parts)
+
+        else:
+
+            # Check for tables in this paragraph
+            if table_pattern.search(para):
+                has_table = True
+
+            # Process paragraph and add to chunk
+            processed = para
+            processed = table_pattern.sub(lambda m: tables.get(m.group(1), {}).get("content", ""), processed)
+            processed = image_pattern.sub("", processed)
+            processed = superscript_pattern.sub("", processed)
+            processed = re.sub(r"\n{2,}", "\n\n", processed).strip()
+
+            if not processed:
+                continue
+
+            if has_table and len(processed) > MAX_CHUNK_LEN:
+                logger.warning(f"[{file_name}] Large table at page={page_index}, section={section_index} → skipping")
+                continue
+
+            # Try to add to current chunk
+            next_doc = (current_doc + "\n\n" + processed) if current_doc else processed
+            if len(next_doc) <= MAX_CHUNK_LEN:
+                current_doc = next_doc
+            else:
+                # Chunk is full: flush and start new
+                flush_chunk()
+                current_doc = processed
+
+    # Flush final chunk
+    flush_chunk()
+    return chunks
+
+
+def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
     try:
         with open(ocr_path, "r", encoding="utf-8") as f:
@@ -56,94 +178,14 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
 
     pages = data.get("pages", [])
     if not pages:
+        logger.debug(f"No pages found in {ocr_path}")
         return []
 
     chunks = []
     for page in pages:
-        page_index = page.get("index", 1) + 1  # start at 1
-        parsed_sections = page.get("parsed", [])
-
-        if not parsed_sections:
-            continue
-
-        for section_index, section in enumerate(parsed_sections, start=1):
-            title = section.get("title", "")
-            level = section.get("level", 0)
-            paragraphs = section.get("paragraphs", [])
-            tables = section.get("tables", [])
-
-            # ========== PARAGRAPHS ==========
-            if paragraphs:
-                current_doc = ""
-                current_chunks = []
-                for para in paragraphs:
-                    # Skip table captions and image references
-                    if para.startswith("TABLEAU") or para.startswith("![") or para.startswith("GRAPHIQUE"):
-                        continue
-
-                    next_doc = current_doc + "\n\n" + para if current_doc else para
-                    if len(next_doc) <= CHUNK_MAX_CHARS:
-                        current_doc = next_doc
-                    else:
-                        current_chunks.append(current_doc)
-                        current_doc = para
-
-                if current_doc:
-                    current_chunks.append(current_doc)
-
-                # if len(current_chunks) > 1:
-                #     logger.debug(
-                #         f"[transform_ssmesr] {file_name}: page={section_index}, section={page_index} --> {len(current_chunks)} paragraph chunks"
-                #     )
-
-                for chunk_index, chunk in enumerate(current_chunks, start=1):
-                    chunks.append(
-                        {
-                            "id": f"ssmesr_{file_name_no_ext}_p{page_index}_s{section_index}_p{chunk_index}",
-                            "document": chunk,
-                            "metadata": {
-                                **document_metadata,
-                                "page_index": page_index,
-                                "section_index": section_index,
-                                "section_title": title[:200],
-                                "section_level": level,
-                                "chunk_type": "paragraph",
-                                "chunk_len": len(chunk),
-                            },
-                        }
-                    )
-
-            # ========== TABLES ==========
-            if tables:
-                # logger.debug(f"[transform_ssmesr] {file_id}: page={page_index}, section={section_index} --> {len(tables)} table(s)")
-
-                for table_index, table in enumerate(tables, start=1):
-                    if not isinstance(table, dict):
-                        logger.warning(f"Empty table found for document {file_name} ({ocr_path})")
-                        continue
-
-                    table_id = table.get("id", f"t{table_index}")
-                    table_content = table.get("content", "")
-
-                    if not table_content:
-                        logger.warning(f"Empty table content for {table_id} in document {file_name} ({ocr_path})")
-                        continue
-
-                    chunks.append(
-                        {
-                            "id": f"ssmesr_{file_name_no_ext}_p{page_index}_s{section_index}_{table_id}",
-                            "document": table_content,
-                            "metadata": {
-                                **document_metadata,
-                                "chunk_type": "table",
-                                "chunk_len": len(table_content),
-                                "page_index": page_index,
-                                "section_index": section_index,
-                                "section_title": title[:200],
-                                "section_level": level,
-                            },
-                        }
-                    )
+        page_chunks = chunk_one_page(page, document_metadata)
+        if page_chunks:
+            chunks.extend(page_chunks)
 
     return chunks
 
@@ -195,7 +237,7 @@ def transform() -> list[dict]:
 
     logger.info(f"Generated {len(chunks)} SSMESR chunks")
     logger.info(f"  - Paragraphs: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'paragraph')}")
-    logger.info(f"  - Tables: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'table')}")
+    # logger.info(f"  - Tables: {sum(1 for c in chunks if c['metadata']['chunk_type'] == 'table')}")
 
     save_jsonl(chunks, OUTPUT_CHUNKS)
     return chunks

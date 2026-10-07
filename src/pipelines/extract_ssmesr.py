@@ -11,190 +11,6 @@ from src.pipelines.load_ssmesr import get_records, get_files
 logger = logging.getLogger(__name__)
 
 
-def parse_table(md: str) -> dict | None:
-    lines = [line.strip() for line in md.strip().splitlines()]
-    # Remove separator line
-    lines = [line for line in lines if not re.match(r"^\|[-:\s|]+\|$", line)]
-
-    rows = []
-    for line in lines:
-        cells = [cell.strip() for cell in line.strip("|").split("|")]
-        rows.append(cells)
-
-    if not rows:
-        return None
-
-    headers = rows[0]
-    data = rows[1:]
-
-    return {"headers": headers, "data": data}
-
-
-def parse_one_page(page: dict) -> list[dict]:
-    """
-    Parse OCR results for one page
-    """
-    markdown = page.get("markdown", "")
-    tables = {tbl["id"]: tbl for tbl in page.get("tables", [])}
-    images = {img["id"]: img for img in page.get("images", [])}
-
-    sections: list[dict] = []
-    current_section: dict | None = None
-    buffer: list[str] = []
-
-    def flush_buffer():
-        nonlocal current_section
-        if current_section is None or not buffer:
-            return
-        text = "\n".join(buffer).strip()
-        if text:
-            # Remove table/image references, they're handled separately
-            text = re.sub(r"\[tbl-\w+\.md\]\(\w+\.md\)", "", text)
-            text = re.sub(r"!\[[\w-]+\.jpeg\]\([\w-]+\.jpeg\)", "", text)
-            text = re.sub(r"\n{2,}", "\n\n", text).strip()
-
-            if text:
-                if not "paragraphs" in current_section:
-                    current_section["paragraphs"] = []
-                current_section["paragraphs"].append(text)
-        buffer.clear()
-
-    for line in markdown.splitlines():
-        heading_match = re.match(r"^(#{1,6})\s+(.*)", line)
-
-        if heading_match:
-            flush_buffer()
-
-            # Create new section
-            level = len(heading_match.group(1))
-            title = heading_match.group(2).strip()
-            current_section = {"level": level, "title": title}
-            sections.append(current_section)
-
-        elif "[tbl-" in line and ".md" in line:
-            flush_buffer()
-
-            match = re.search(r"\[tbl-(\w+\.md)\]", line)
-            if match and current_section:
-                table_id = "tbl-" + match.group(1)
-                if table_id in tables:
-                    if not "tables" in current_section:
-                        current_section["tables"] = []
-                    current_section["tables"].append(tables[table_id])
-
-        elif "![img-" in line and ".jpeg" in line:
-            flush_buffer()
-            match = re.search(r"!\[([^\]]+)\]", line)
-            if match and current_section:
-                img_id = match.group(1) + ".jpeg"
-                if img_id in images:
-                    if not "images" in current_section:
-                        current_section["images"] = []
-                    current_section["images"].append(images[img_id])
-
-        elif line.strip():
-            # If no section yet and buffer is empty, first line is title
-            if current_section is None and not buffer:
-                current_section = {"level": 0, "title": line.strip()}
-                sections.append(current_section)
-            else:
-                buffer.append(line)
-
-    flush_buffer()
-
-    return sections
-
-
-def parse_one_ocr(file: pd.Series, use_cache: bool = True) -> pd.Series:
-    file_name = file["file_name"]
-    file_path = file["file_path"]
-    file_format = file["file_format"]
-    ocr_path = file["ocr_path"]
-
-    results = pd.Series({"parsed": 0, "skipped": 0, "failed": 0, "empty": 0, "total": 0, "file": "failed"})
-
-    # Only pdf
-    if not file_format == "pdf":
-        logger.debug(f"Skipping {file_name} ({file_format=})")
-        results["file"] = "skipped"
-        return results
-
-    if not ocr_path:
-        logger.debug(f"No ocr_path found for {file_name} ({file_path=})")
-        return results
-
-    ocr_data = load_jsonl(ocr_path)
-    if not ocr_data:
-        logger.debug(f"No data found in {ocr_path}")
-        return results
-
-    if not isinstance(ocr_data, dict):
-        logger.debug(f"Invalid data type in {ocr_path} ({type(ocr_data)=})")
-        return results
-
-    ocr_pages = ocr_data.get("pages")
-    if not ocr_pages:
-        logger.debug(f"No pages found in {ocr_path}")
-        return results
-
-    if not isinstance(ocr_pages, list):
-        logger.debug(f"Invalid data type in {ocr_path} ({type(ocr_pages)=})")
-        return results
-
-    # logger.debug(f"[debug] ocr_pages: {len(ocr_pages)}")
-    results["total"] = len(ocr_pages)
-
-    for page in ocr_pages:
-        parsed = page.get("parsed")
-
-        if use_cache and parsed:
-            results["skipped"] += 1
-            continue
-
-        try:
-            sections = parse_one_page(page)
-            if sections:
-                page["parsed"] = sections
-                results["parsed"] += 1
-            else:
-                results["empty"] += 1
-        except Exception as error:
-            logger.error(f"Failed to parse page {page['index']} of {ocr_path}: {error}")
-            results["failed"] += 1
-            continue
-
-    if results["parsed"] == 0:
-        if results["skipped"] > 0 and results["skipped"] == results["total"]:
-            results["file"] = "skipped"
-        return results
-
-    results["file"] = "parsed"
-    ocr_data["pages"] = ocr_pages
-    save_jsonl(ocr_data, ocr_path)
-
-    return results
-
-
-def parse_ocr(files: pd.DataFrame, use_cache: bool = True):
-    if not len(files):
-        logger.info("Found 0 files to parse")
-        return
-
-    logger.info(f"Found {len(files)} files to parse")
-
-    # Parse pdf files
-    stats = files.apply(parse_one_ocr, use_cache=use_cache, axis=1)
-
-    # Count stats
-    parsed = int(stats["parsed"].sum())
-    skipped = int(stats["skipped"].sum())
-    failed = int(stats["failed"].sum())
-    empty = int(stats["empty"].sum())
-    total = int(stats["total"].sum())
-    logger.info(f"Parsed {len(files)} files")
-    logger.info(f"Parsed {parsed}/{total} pages ({skipped=}, {failed=}, {empty=})")
-
-
 def extract_one(file: pd.Series, use_cache: bool = True) -> str:
     file_name = file["file_name"]
     file_path = file["file_path"]
@@ -219,7 +35,7 @@ def extract_one(file: pd.Series, use_cache: bool = True) -> str:
         return "failed"
 
 
-def extract_pdf(files: pd.DataFrame, force_ocr: bool = False):
+def extract_pdf(files: pd.DataFrame, use_cache: bool = True):
     if not len(files):
         logger.info("Found 0 files to extract")
         return
@@ -233,7 +49,7 @@ def extract_pdf(files: pd.DataFrame, force_ocr: bool = False):
     logger.info(f"Found {len(pdfs)} pdf from {len(files)} files")
 
     # Extract pdf files
-    stats = pdfs.apply(extract_one, use_cache=not force_ocr, axis=1)
+    stats = pdfs.apply(extract_one, use_cache=use_cache, axis=1)
 
     # Count stats
     stats_counts = stats.value_counts()
@@ -244,7 +60,7 @@ def extract_pdf(files: pd.DataFrame, force_ocr: bool = False):
     logger.info(f"Extracted {extracted}/{len(pdfs)} pdf files ({skipped=}, {failed=})")
 
 
-def extract(use_cache: bool = True, force_ocr: bool = False):
+def extract(use_cache: bool = True):
     # Get records
     records = get_records()
 
@@ -259,20 +75,16 @@ def extract(use_cache: bool = True, force_ocr: bool = False):
 
     # Extract pdf files
     logger.warning("Only pdf files will be extracted")
-    extract_pdf(files, force_ocr=force_ocr)
-
-    # Parse ocr results
-    parse_ocr(files, use_cache)
+    extract_pdf(files, use_cache=use_cache)
 
 
 def extract_cli():
     parser = argparse.ArgumentParser(description="Extract data from records files using OCR")
-    parser.add_argument("--no-cache", action="store_true", help="Force parsing")
-    parser.add_argument("--force-ocr", action="store_true", help="Force Mistral ocr")
+    parser.add_argument("--no-cache", action="store_true", help="Force mistral OCR")
     args = parser.parse_args()
 
     # Extract and parse pdf files
-    extract(use_cache=not args.no_cache, force_ocr=args.force_ocr)
+    extract(use_cache=not args.no_cache)
 
 
 if __name__ == "__main__":

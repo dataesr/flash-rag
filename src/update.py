@@ -32,7 +32,6 @@ class UpdateRequest(BaseModel):
     use_cache: bool = True
     use_fetch: bool = True
     force_download: bool = False
-    force_ocr: bool = False
     db_override: bool = False
     db_reset: bool = False
 
@@ -58,7 +57,7 @@ def update(payload: UpdateRequest):
                 logger.info(f"{'='*60}")
                 logger.info(f"=== Extracting {ref.upper()} documents ===")
                 logger.info(f"{'='*60}")
-                extract_fnc(use_cache=payload.use_cache, force_ocr=payload.force_ocr)
+                extract_fnc(use_cache=payload.use_cache)
 
         if payload.task in ["transform"]:
             # transform documents (chunking)
@@ -93,7 +92,6 @@ def update_cli():
     parser.add_argument("--reference", choices=["all", "ssmesr", "eesr"], default="all", help="Reference to update")
     parser.add_argument("--no-cache", action="store_true", help="Force reprocessing of documents")
     parser.add_argument("--force-download", action="store_true", help="Force redownload of documents")
-    parser.add_argument("--force-ocr", action="store_true", help="Force re-ocr of files")
     parser.add_argument("--db-override", action="store_true", help="Override existing documents in the database")
     parser.add_argument("--db-reset", action="store_true", help="Reset the database before populating")
     args = parser.parse_args()
@@ -103,7 +101,6 @@ def update_cli():
         reference=args.reference,
         use_cache=not args.no_cache,
         force_download=args.force_download,
-        force_ocr=args.force_ocr,
         db_override=args.db_override,
         db_reset=args.db_reset,
     )
