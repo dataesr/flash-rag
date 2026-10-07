@@ -30,51 +30,78 @@ def parse_table(md: str) -> dict | None:
     return {"headers": headers, "data": data}
 
 
-def parse_markdown(md: str) -> list[dict] | None:
+def parse_one_page(page: dict) -> list[dict]:
+    """
+    Parse OCR results for one page
+    """
+    markdown = page.get("markdown", "")
+    tables = {tbl["id"]: tbl for tbl in page.get("tables", [])}
+    images = {img["id"]: img for img in page.get("images", [])}
+
     sections: list[dict] = []
-    current: dict | None = None
+    current_section: dict | None = None
     buffer: list[str] = []
 
-    if not md:
-        return None
-
     def flush_buffer():
-        if current is None or not buffer:
+        nonlocal current_section
+        if current_section is None or not buffer:
             return
-        block = "\n".join(buffer).strip()
-        if not block:
-            return
+        text = "\n".join(buffer).strip()
+        if text:
+            # Remove table/image references, they're handled separately
+            text = re.sub(r"\[tbl-\w+\.md\]\(\w+\.md\)", "", text)
+            text = re.sub(r"!\[[\w-]+\.jpeg\]\([\w-]+\.jpeg\)", "", text)
+            text = re.sub(r"\n{2,}", "\n\n", text).strip()
 
-        # Split block into chunks separated by blank lines (2 or more \n)
-        for chunk in re.split(r"\n{2,}", block):
-            chunk = chunk.strip()
-            if not chunk:
-                continue
-
-            lines = chunk.splitlines()
-            # A table has at least one | and a separator line with --- or : between two |
-            is_table = any("|" in line for line in lines) and any(re.match(r"^\s*\|[\s\-|:]+\|\s*$", line) for line in lines)
-
-            if is_table:
-                current["tables"].append(parse_table(chunk))
-            else:
-                if chunk:
-                    current["paragraphs"].append(chunk)
+            if text:
+                if not "paragraphs" in current_section:
+                    current_section["paragraphs"] = []
+                current_section["paragraphs"].append(text)
         buffer.clear()
 
-    for line in md.splitlines():
-        heading = re.match(r"^(#{1,4})\s+(.*)", line)  # 1 to 4 # followed by a space and the title
-        if heading:
+    for line in markdown.splitlines():
+        heading_match = re.match(r"^(#{1,6})\s+(.*)", line)
+
+        if heading_match:
             flush_buffer()
-            level = len(heading.group(1))
-            title = heading.group(2).strip()
-            current = {"level": level, "title": title, "paragraphs": [], "tables": []}
-            sections.append(current)
-        else:
-            if current is not None:
+
+            # Create new section
+            level = len(heading_match.group(1))
+            title = heading_match.group(2).strip()
+            current_section = {"level": level, "title": title}
+            sections.append(current_section)
+
+        elif "[tbl-" in line and ".md" in line:
+            flush_buffer()
+
+            match = re.search(r"\[tbl-(\w+\.md)\]", line)
+            if match and current_section:
+                table_id = "tbl-" + match.group(1)
+                if table_id in tables:
+                    if not "tables" in current_section:
+                        current_section["tables"] = []
+                    current_section["tables"].append(tables[table_id])
+
+        elif "![img-" in line and ".jpeg" in line:
+            flush_buffer()
+            match = re.search(r"!\[([^\]]+)\]", line)
+            if match and current_section:
+                img_id = match.group(1) + ".jpeg"
+                if img_id in images:
+                    if not "images" in current_section:
+                        current_section["images"] = []
+                    current_section["images"].append(images[img_id])
+
+        elif line.strip():
+            # If no section yet and buffer is empty, first line is title
+            if current_section is None and not buffer:
+                current_section = {"level": 0, "title": line.strip()}
+                sections.append(current_section)
+            else:
                 buffer.append(line)
 
     flush_buffer()
+
     return sections
 
 
@@ -118,20 +145,14 @@ def parse_one_ocr(file: pd.Series, use_cache: bool = True) -> pd.Series:
     results["total"] = len(ocr_pages)
 
     for page in ocr_pages:
-        md = page.get("markdown")
         parsed = page.get("parsed")
 
         if use_cache and parsed:
             results["skipped"] += 1
             continue
 
-        if not md:
-            logger.debug(f"No markdown found in page {page['index']} of {ocr_path}")
-            results["empty"] += 1
-            continue
-
         try:
-            sections = parse_markdown(md)
+            sections = parse_one_page(page)
             if sections:
                 page["parsed"] = sections
                 results["parsed"] += 1

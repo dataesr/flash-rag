@@ -122,28 +122,25 @@ def chunk_document(ocr_path: str, document_metadata: dict) -> list[dict]:
                         logger.warning(f"Empty table found for document {file_name} ({ocr_path})")
                         continue
 
-                    # Convert table to searchable markdown
-                    markdown_table, csv_table, headers_text = parse_table(table)
+                    table_id = table.get("id", f"t{table_index}")
+                    table_content = table.get("content", "")
 
-                    if not markdown_table:
-                        logger.warning(f"No markdown table for document {file_name} ({ocr_path})")
+                    if not table_content:
+                        logger.warning(f"Empty table content for {table_id} in document {file_name} ({ocr_path})")
                         continue
 
                     chunks.append(
                         {
-                            "id": f"ssmesr_{file_name_no_ext}_p{page_index}_s{section_index}_t{table_index}",
-                            "document": markdown_table,
+                            "id": f"ssmesr_{file_name_no_ext}_p{page_index}_s{section_index}_{table_id}",
+                            "document": table_content,
                             "metadata": {
                                 **document_metadata,
                                 "chunk_type": "table",
-                                "chunk_len": len(markdown_table),
+                                "chunk_len": len(table_content),
                                 "page_index": page_index,
                                 "section_index": section_index,
                                 "section_title": title[:200],
                                 "section_level": level,
-                                # "table_index": table_index,
-                                # "table_headers": headers_text[:500],
-                                # "table_csv": csv_table,
                             },
                         }
                     )
