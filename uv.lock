@@ -621,7 +621,7 @@ wheels = [
 
 [[package]]
 name = "flash-notes-rag"
-version = "0.3.15"
+version = "0.3.16"
 source = { virtual = "." }
 dependencies = [
     { name = "chromadb" },
