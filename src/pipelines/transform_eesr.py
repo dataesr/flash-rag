@@ -189,11 +189,7 @@ def page_to_chunks(page: dict[str, Any]) -> list[dict[str, Any]]:
     return chunks
 
 
-def transform(use_cache: bool = True) -> list[dict[str, Any]]:
-    if use_cache and os.path.exists(OUTPUT_CHUNKS):
-        logger.info(f"Chunks already exist in {OUTPUT_CHUNKS}, skipping")
-        return pd.read_json(OUTPUT_CHUNKS, lines=True, encoding="utf-8").to_dict(orient="records")
-
+def transform() -> list[dict[str, Any]]:
     pages = get_pages()
     if pages.empty:
         logger.info("No EESR pages found")
@@ -218,9 +214,9 @@ def transform(use_cache: bool = True) -> list[dict[str, Any]]:
 
 def transform_cli():
     parser = argparse.ArgumentParser(description="Transform EESR pages into chunked documents")
-    parser.add_argument("--no-cache", action="store_true", help="Force reload of chunks")
+    # parser.add_argument("--no-cache", action="store_true", help="Force reload of chunks")
     args = parser.parse_args()
-    transform(use_cache=not args.no_cache)
+    transform()
 
 
 if __name__ == "__main__":

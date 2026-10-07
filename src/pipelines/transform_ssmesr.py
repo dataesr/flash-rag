@@ -171,11 +171,7 @@ def build_document_metadata(file: pd.Series) -> dict:
     return metadata
 
 
-def transform(use_cache: bool = True) -> list[dict]:
-    if use_cache and os.path.exists(OUTPUT_CHUNKS):
-        logger.info(f"Chunks already exist in {OUTPUT_CHUNKS}, skipping")
-        return pd.read_json(OUTPUT_CHUNKS, lines=True, encoding="utf-8").to_dict(orient="records")
-
+def transform() -> list[dict]:
     records = get_records()
     if records.empty:
         logger.info("No SSMESR records found")
@@ -207,9 +203,9 @@ def transform(use_cache: bool = True) -> list[dict]:
 
 def transform_cli():
     parser = argparse.ArgumentParser(description="Transform SSMESR OCR results into chunked documents (paragraphs + tables)")
-    parser.add_argument("--no-cache", action="store_true", help="Force reload of chunks")
+    # parser.add_argument("--no-cache", action="store_true", help="Force reload of chunks")
     args = parser.parse_args()
-    transform(use_cache=not args.no_cache)
+    transform()
 
 
 if __name__ == "__main__":

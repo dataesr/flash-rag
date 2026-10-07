@@ -85,8 +85,13 @@ def download_file(url: str, output_path: str):
 
 
 def to_unix_epoch(date_str: str) -> int:
-    """Convert a date string to a Unix epoch timestamp."""
+    """Convert an ISO date string to a Unix epoch timestamp.
+
+    Year-month dates are interpreted as the first day of that month.
+    """
     try:
+        if len(date_str) == 7 and date_str[4] == "-":
+            date_str = f"{date_str}-01"
         dt = datetime.fromisoformat(date_str)
         return int(dt.timestamp())
     except Exception as error:

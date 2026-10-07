@@ -66,7 +66,7 @@ def update(payload: UpdateRequest):
                 logger.info(f"{'='*60}")
                 logger.info(f"=== Chunking {ref.upper()} documents ===")
                 logger.info(f"{'='*60}")
-                transform_fnc(payload.use_cache)
+                transform_fnc()
 
     if payload.task in ["all", "populate"]:
         # populate collection

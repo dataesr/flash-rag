@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from main import app
 from src.mistral import batch_mistral_documents
-from src.utils import fetch_data, parse_key_value_pair
+from src.utils import fetch_data, parse_key_value_pair, to_unix_epoch
 
 class SmokeTests(unittest.TestCase):
 
@@ -69,6 +69,9 @@ class SmokeTests(unittest.TestCase):
     def test_filter_parser_preserves_equals_in_value(self):
         self.assertEqual(parse_key_value_pair("reference=ssmesr"), ("reference", "ssmesr"))
         self.assertEqual(parse_key_value_pair("query=a=b"), ("query", "a=b"))
+
+    def test_year_month_date_uses_first_day_of_month(self):
+        self.assertEqual(to_unix_epoch("2024-06"), to_unix_epoch("2024-06-01"))
 
     def test_query_endpoint_returns_contract_without_external_services(self):
         expected = ([{"id": "source-1"}], "mistral_not_enabled", [])

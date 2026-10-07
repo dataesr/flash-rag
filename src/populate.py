@@ -38,14 +38,14 @@ def populate(
 
     if reference in ["all", "ssmesr"]:
         logger.info("Running SSMESR transform")
-        ssmesr_chunks = transform_ssmesr(use_cache=False)
+        ssmesr_chunks = transform_ssmesr()
         logger.info(f"SSMESR chunks: {len(ssmesr_chunks)}")
         if len(ssmesr_chunks):
             all_chunks += ssmesr_chunks
 
     if reference in ["all", "eesr"]:
         logger.info("Running EESR transform")
-        eesr_chunks = transform_eesr(use_cache=False)
+        eesr_chunks = transform_eesr()
         logger.info(f"EESR chunks: {len(eesr_chunks)}")
         if len(eesr_chunks):
             all_chunks += eesr_chunks
