@@ -52,7 +52,7 @@ class SmokeTests(unittest.TestCase):
         self.assertTrue(records.empty)
         self.assertEqual(client.get.call_count, 4)
         self.assertEqual(retry_sleep.call_count, 2)
-        sleep.assert_called_once_with(15)
+        sleep.assert_called_once_with(61)
 
     def test_mistral_batches_respect_request_limit(self):
         documents = [f"document-{index}" for index in range(9)]
