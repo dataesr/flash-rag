@@ -231,7 +231,7 @@ def extract(use_cache: bool = True, force_ocr: bool = False):
     # records = records[records["metadata"].apply(lambda x: x.get("resource_type", {}).get("subtype") == "article")]
     # logger.info(f"Found {len(records)} 'article' records")
     records = records[~records["title"].isin([EESR_TITLE])]
-    logger.debug(f"Skip EESR records - added separatly (remaining records={len(records)})")
+    logger.debug(f"Skip EESR records - added separately (remaining records={len(records)})")
 
     # Get files from records
     files = get_files(records)
