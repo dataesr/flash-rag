@@ -25,7 +25,6 @@ jobs:
               "use_cache": true,
               "use_fetch": true,
               "force_download": false,
-              "force_ocr": false,
               "db_override": false,
               "db_reset": false
             }')
