@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 BM25_DIR = "./data/bm25"
 BM25_PATH = f"{BM25_DIR}/index.pkl"
+BM25_BATCH_SIZE = 1000
 LEMMATIZER = WordNetLemmatizer()
 
 _bm25_index = None
@@ -144,11 +145,20 @@ def build_bm25_index() -> bool:
 
     collection = get_collection()
 
-    # Retrieve the complete corpus
-    results = collection.get(include=["documents", "metadatas"])
-    ids = results["ids"] or []
-    documents = results["documents"] or []
-    metadatas = results["metadatas"] or []
+    # Page through the corpus to avoid SQLite's limit on query variables.
+    ids = []
+    documents = []
+    metadatas = []
+    collection_size = collection.count()
+    for offset in range(0, collection_size, BM25_BATCH_SIZE):
+        results = collection.get(
+            limit=min(BM25_BATCH_SIZE, collection_size - offset),
+            offset=offset,
+            include=["documents", "metadatas"],
+        )
+        ids.extend(results["ids"] or [])
+        documents.extend(results["documents"] or [])
+        metadatas.extend(results["metadatas"] or [])
 
     logger.info(f"Indexing {len(documents)} documents")
 

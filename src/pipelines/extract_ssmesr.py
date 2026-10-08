@@ -1,4 +1,3 @@
-from src.pipelines.load_eesr import EESR_TITLE
 import os
 import re
 import logging
@@ -7,6 +6,7 @@ import pandas as pd
 from src.mistral import mistral_ocr
 from src.utils import save_jsonl, load_jsonl
 from src.pipelines.load_ssmesr import get_records, get_files
+from src.pipelines.load_eesr import EESR_TITLE
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ def extract(use_cache: bool = True):
     # logger.warning("Only 'article' publications will be extracted")
     # records = records[records["metadata"].apply(lambda x: x.get("resource_type", {}).get("subtype") == "article")]
     # logger.info(f"Found {len(records)} 'article' records")
-    records = records[~records["title"].isin([EESR_TITLE])]
+    records = records[~records["title"].apply(lambda title: EESR_TITLE.lower() in title.lower())]
     logger.debug(f"Skip EESR records - added separately (remaining records={len(records)})")
 
     # Get files from records

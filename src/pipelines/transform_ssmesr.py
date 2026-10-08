@@ -1,3 +1,4 @@
+from src.pipelines.load_eesr import EESR_TITLE
 import os
 import re
 import json
